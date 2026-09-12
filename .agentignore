@@ -1,0 +1,36 @@
+# .agentignore — C:\DevWorkspace\codexcli 專屬防護
+# 避免 AI Agent 在程式碼搜尋 (Grep/Find) 時掃入封存庫與暫存雜訊，保護 Token
+
+# ─── 封存庫與垃圾桶 (大量歷史檔案，極易暴衝 Token) ───
+_archive/
+_trash_review/
+%CODEX_HOME%/
+temp/
+tmp*/
+
+# ─── 備份檔案 ─────────────────────────────────
+*.bak*
+*.bak_*
+*~
+
+# ─── Python 快取與虛擬環境 ───────────────────
+__pycache__/
+*.pyc
+*.pyo
+.venv/
+*_venv/
+.pytest_cache/
+
+# ─── 影音與大型二進位檔 ───────────────────────
+*.mp4
+*.mp3
+*.wav
+*.zip
+*.tar.gz
+*.exe
+*.bin
+
+# ─── 版本控制與編輯器雜訊 ───────────────────
+.git/
+.vscode/
+.idea/
