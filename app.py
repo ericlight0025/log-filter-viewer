@@ -1,9 +1,17 @@
+import sys
 import streamlit as st
 import re
 import html
 import json
 import datetime
 import uuid
+
+# 支援直接使用 `python app.py` 或 `py app.py` 啟動，自動轉接至 Streamlit 服務
+if __name__ == "__main__":
+    if not st.runtime.exists():
+        from streamlit.web import cli as stcli
+        sys.argv = ["streamlit", "run", __file__, "--server.port", "6666"]
+        sys.exit(stcli.main())
 
 # ==============================================================================
 # 頁面基本設定
