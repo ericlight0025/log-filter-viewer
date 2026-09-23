@@ -12,35 +12,77 @@
     padding: 0;
   }
 
+  /* ===== 主題變數 (預設為 Obsidian 黑曜石風格) ===== */
+  :root, body, body.theme-obsidian {
+    --bg-body: #161618;
+    --bg-panel: #1a1a1e;
+    --bg-table: #18181a;
+    --bg-match: #28203d;
+    --color-match-line: #c084fc;
+    --color-line-no: #636e7b;
+    --border-color: #363640;
+    --text-main: #dcddde;
+    --accent: #9333ea;
+    --sep-bg: #1f1d28;
+    --sep-color: #8b7bb0;
+    --kw-0: #9333ea;
+    --kw-1: #d97706;
+    --kw-2: #2563eb;
+    --kw-3: #059669;
+    --kw-4: #db2777;
+    --kw-5: #e11d48;
+  }
+
+  body.theme-github {
+    --bg-body: #0d1117;
+    --bg-panel: #161b22;
+    --bg-table: #0d1117;
+    --bg-match: #161f30;
+    --color-match-line: #f0883e;
+    --color-line-no: #6e7681;
+    --border-color: #30363d;
+    --text-main: #c9d1d9;
+    --accent: #58a6ff;
+    --sep-bg: #161b22;
+    --sep-color: #484f58;
+    --kw-0: #8957e5;
+    --kw-1: #b08800;
+    --kw-2: #1f6feb;
+    --kw-3: #238636;
+    --kw-4: #bf4b8a;
+    --kw-5: #da3633;
+  }
+
   body {
     font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
-    background: #0d1117;
-    color: #c9d1d9;
+    background: var(--bg-body);
+    color: var(--text-main);
     min-height: 100vh;
     display: flex;
     flex-direction: column;
+    transition: background 0.2s, color 0.2s;
   }
 
   body.drag-active::after {
     content: '📂 放開以載入 Log 檔案';
     position: fixed;
     top: 0; left: 0; width: 100%; height: 100%;
-    background: rgba(13, 17, 23, 0.85);
-    color: #58a6ff;
+    background: rgba(22, 22, 24, 0.88);
+    color: var(--color-match-line);
     font-size: 32px;
     font-weight: 600;
     display: flex;
     align-items: center;
     justify-content: center;
     z-index: 9999;
-    border: 4px dashed #58a6ff;
+    border: 4px dashed var(--color-match-line);
     pointer-events: none;
   }
 
   /* ===== 頂部標題列 ===== */
   header {
-    background: #161b22;
-    border-bottom: 1px solid #30363d;
+    background: var(--bg-panel);
+    border-bottom: 1px solid var(--border-color);
     padding: 14px 24px;
     display: flex;
     align-items: center;
@@ -51,7 +93,7 @@
   header h1 {
     font-size: 19px;
     font-weight: 600;
-    color: #e6edf3;
+    color: var(--text-main);
     letter-spacing: 0.3px;
   }
 
@@ -61,8 +103,8 @@
 
   /* ===== 控制面板 ===== */
   .controls {
-    background: #161b22;
-    border-bottom: 1px solid #30363d;
+    background: var(--bg-panel);
+    border-bottom: 1px solid var(--border-color);
     padding: 16px 24px;
     display: flex;
     flex-direction: column;
@@ -350,19 +392,21 @@
   }
 
   .log-table tr {
-    border-bottom: 1px solid #21262d;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.05);
   }
 
-  .log-table tr.context { background: #0d1117; }
-  .log-table tr.match { background: #161f30; }
+  .log-table tr.context { background: var(--bg-table); }
+  .log-table tr.match { background: var(--bg-match); }
   .log-table tr.separator td {
-    background: #161b22;
+    background: var(--sep-bg);
     text-align: center;
-    color: #484f58;
+    color: var(--sep-color);
     font-size: 12px;
     padding: 4px 0;
     user-select: none;
-    letter-spacing: 3px;
+    letter-spacing: 4px;
+    border-top: 1px dashed var(--border-color);
+    border-bottom: 1px dashed var(--border-color);
   }
 
   .log-table .line-no {
@@ -370,44 +414,45 @@
     min-width: 75px;
     text-align: right;
     padding: 3px 12px 3px 12px;
-    color: #484f58;
+    color: var(--color-line-no);
     user-select: none;
     vertical-align: top;
-    border-right: 1px solid #21262d;
+    border-right: 1px solid var(--border-color);
     position: sticky;
     left: 0;
     background: inherit;
   }
 
   .log-table tr.match .line-no {
-    color: #f0883e;
-    font-weight: 600;
+    color: var(--color-match-line);
+    font-weight: 700;
   }
 
   .log-table .line-content {
     padding: 3px 14px;
     white-space: pre;
+    color: var(--text-main);
   }
 
   .highlight {
     border-radius: 3px;
-    padding: 1px 3px;
-    font-weight: 500;
+    padding: 1px 4px;
+    font-weight: 600;
   }
-  .highlight-0, .kw-color-0 { background: #8957e5; color: #fff; }
-  .highlight-1, .kw-color-1 { background: #b08800; color: #fff; }
-  .highlight-2, .kw-color-2 { background: #1f6feb; color: #fff; }
-  .highlight-3, .kw-color-3 { background: #238636; color: #fff; }
-  .highlight-4, .kw-color-4 { background: #bf4b8a; color: #fff; }
-  .highlight-5, .kw-color-5 { background: #da3633; color: #fff; }
+  .highlight-0, .kw-color-0 { background: var(--kw-0); color: #fff; }
+  .highlight-1, .kw-color-1 { background: var(--kw-1); color: #fff; }
+  .highlight-2, .kw-color-2 { background: var(--kw-2); color: #fff; }
+  .highlight-3, .kw-color-3 { background: var(--kw-3); color: #fff; }
+  .highlight-4, .kw-color-4 { background: var(--kw-4); color: #fff; }
+  .highlight-5, .kw-color-5 { background: var(--kw-5); color: #fff; }
 
   /* ===== 底部狀態列 ===== */
   footer {
-    background: #161b22;
-    border-top: 1px solid #30363d;
+    background: var(--bg-panel);
+    border-top: 1px solid var(--border-color);
     padding: 6px 24px;
     font-size: 12px;
-    color: #484f58;
+    color: var(--color-line-no);
     flex-shrink: 0;
     display: flex;
     justify-content: space-between;
@@ -437,6 +482,15 @@
     
     <div class="spacer"></div>
     
+    <!-- 主題切換 -->
+    <div class="select-group">
+      <label for="themeSelect">🎨 主題：</label>
+      <select id="themeSelect" class="custom-select">
+        <option value="obsidian" selected>Obsidian (黑曜石)</option>
+        <option value="github">GitHub Dark</option>
+      </select>
+    </div>
+
     <!-- 匯出/匯入條件 -->
     <button type="button" class="btn btn-secondary" id="exportPresetBtn" title="將目前的查詢條件下載為 JSON 檔">
       💾 匯出條件
@@ -1097,6 +1151,19 @@ endTimeInput.addEventListener('change', () => { if (logLines.length > 0) searchL
 searchBtn.addEventListener('click', searchLog);
 clearBtn.addEventListener('click', clearSearch);
 copyBtn.addEventListener('click', copyToClipboard);
+
+const themeSelect = document.getElementById('themeSelect');
+if (themeSelect) {
+  themeSelect.addEventListener('change', function() {
+    document.body.className = `theme-${this.value}`;
+    try { localStorage.setItem('log_filter_theme', this.value); } catch (_) {}
+  });
+  try {
+    const savedTheme = localStorage.getItem('log_filter_theme') || 'obsidian';
+    themeSelect.value = savedTheme;
+    document.body.className = `theme-${savedTheme}`;
+  } catch (_) {}
+}
 
 </script>
 </body>

@@ -24,106 +24,72 @@ st.set_page_config(
     initial_sidebar_state="expanded"
 )
 
-# 自訂深色日誌閱讀器樣式
-st.markdown("""
-<style>
-  /* 隱藏部分 Streamlit 預設留白 */
-  .block-container {
-    padding-top: 1.5rem;
-    padding-bottom: 2rem;
-  }
-  
-  /* 關鍵字編號標籤色彩 (6色循環) */
-  .kw-badge {
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    width: 28px;
-    height: 38px;
-    border-radius: 6px;
-    font-size: 13px;
-    font-weight: 700;
-    color: #fff;
-    user-select: none;
-    margin-right: 4px;
-  }
-  .kw-color-0, .highlight-0 { background: #8957e5; color: #fff; } /* 紫 */
-  .kw-color-1, .highlight-1 { background: #b08800; color: #fff; } /* 琥珀 */
-  .kw-color-2, .highlight-2 { background: #1f6feb; color: #fff; } /* 藍 */
-  .kw-color-3, .highlight-3 { background: #238636; color: #fff; } /* 綠 */
-  .kw-color-4, .highlight-4 { background: #bf4b8a; color: #fff; } /* 粉 */
-  .kw-color-5, .highlight-5 { background: #da3633; color: #fff; } /* 紅 */
+# ==============================================================================
+# 🎨 佈景主題設定 (支援 Obsidian 黑曜石、GitHub Dark、Dracula、Monokai)
+# ==============================================================================
+THEMES = {
+    "Obsidian (黑曜石)": {
+        "container_bg": "#161618",
+        "table_bg": "#18181a",
+        "match_bg": "#28203d",
+        "match_line_no": "#c084fc",
+        "context_bg": "#18181a",
+        "line_no_color": "#636e7b",
+        "line_no_border": "#2c2c32",
+        "text_color": "#dcddde",
+        "border_color": "#363640",
+        "separator_bg": "#1f1d28",
+        "separator_color": "#8b7bb0",
+        "accent": "#9333ea",
+        "palette": ["#9333ea", "#d97706", "#2563eb", "#059669", "#db2777", "#e11d48"]
+    },
+    "GitHub Dark (經典藍灰)": {
+        "container_bg": "#0d1117",
+        "table_bg": "#0d1117",
+        "match_bg": "#161f30",
+        "match_line_no": "#f0883e",
+        "context_bg": "#0d1117",
+        "line_no_color": "#6e7681",
+        "line_no_border": "#21262d",
+        "text_color": "#c9d1d9",
+        "border_color": "#30363d",
+        "separator_bg": "#161b22",
+        "separator_color": "#484f58",
+        "accent": "#58a6ff",
+        "palette": ["#8957e5", "#b08800", "#1f6feb", "#238636", "#bf4b8a", "#da3633"]
+    },
+    "Dracula (吸血鬼)": {
+        "container_bg": "#282a36",
+        "table_bg": "#282a36",
+        "match_bg": "#44475a",
+        "match_line_no": "#ff79c6",
+        "context_bg": "#282a36",
+        "line_no_color": "#6272a4",
+        "line_no_border": "#44475a",
+        "text_color": "#f8f8f2",
+        "border_color": "#6272a4",
+        "separator_bg": "#21222c",
+        "separator_color": "#bd93f9",
+        "accent": "#bd93f9",
+        "palette": ["#bd93f9", "#ffb86c", "#8be9fd", "#50fa7b", "#ff79c6", "#ff5555"]
+    },
+    "Monokai (高對比黑金)": {
+        "container_bg": "#272822",
+        "table_bg": "#272822",
+        "match_bg": "#3e3d32",
+        "match_line_no": "#a6e22e",
+        "context_bg": "#272822",
+        "line_no_color": "#75715e",
+        "line_no_border": "#3e3d32",
+        "text_color": "#f8f8f2",
+        "border_color": "#49483e",
+        "separator_bg": "#1e1f1c",
+        "separator_color": "#a6e22e",
+        "accent": "#f92672",
+        "palette": ["#ae81ff", "#e6db74", "#66d9ef", "#a6e22e", "#fd971f", "#f92672"]
+    }
+}
 
-  .highlight {
-    border-radius: 3px;
-    padding: 1px 4px;
-    font-weight: 600;
-  }
-
-  /* Log 表格容器 */
-  .log-container {
-    border: 1px solid #30363d;
-    border-radius: 8px;
-    background: #0d1117;
-    overflow-x: auto;
-    margin-top: 12px;
-  }
-
-  .log-table {
-    width: 100%;
-    border-collapse: collapse;
-    font-family: "SFMono-Regular", Consolas, "Liberation Mono", Menlo, monospace;
-    font-size: 13px;
-    line-height: 1.5;
-    color: #c9d1d9;
-  }
-
-  .log-table tr {
-    border-bottom: 1px solid #161b22;
-  }
-
-  .log-table tr.context {
-    background: #0d1117;
-  }
-
-  .log-table tr.match {
-    background: #161f30;
-  }
-
-  .log-table tr.separator td {
-    background: #161b22;
-    text-align: center;
-    color: #484f58;
-    font-size: 12px;
-    padding: 4px 0;
-    user-select: none;
-    letter-spacing: 4px;
-  }
-
-  .log-table .line-no {
-    width: 75px;
-    min-width: 75px;
-    text-align: right;
-    padding: 3px 12px;
-    color: #6e7681;
-    user-select: none;
-    vertical-align: top;
-    border-right: 1px solid #21262d;
-    background: inherit;
-  }
-
-  .log-table tr.match .line-no {
-    color: #f0883e;
-    font-weight: 700;
-  }
-
-  .log-table .line-content {
-    padding: 3px 14px;
-    white-space: pre-wrap;
-    word-break: break-all;
-  }
-</style>
-""", unsafe_allow_html=True)
 
 
 # ==============================================================================
@@ -249,6 +215,18 @@ if st.query_params.get("demo") == "1" and not st.session_state.log_lines:
 with st.sidebar:
     st.header("📂 檔案與設定")
     
+    # 選擇日誌閱讀主題 (預設為 Obsidian 黑曜石風格)
+    st.subheader("🎨 日誌主題 (Theme)")
+    selected_theme_name = st.selectbox(
+        "選擇閱讀主題",
+        options=list(THEMES.keys()),
+        index=0,
+        help="支援 Obsidian (黑曜石)、GitHub Dark、Dracula、Monokai 配色"
+    )
+    theme = THEMES[selected_theme_name]
+
+    st.divider()
+
     uploaded_file = st.file_uploader("上傳 Log 檔案", type=None, help="支援 .log, .txt 或任何伺服器日誌檔")
     
     # 快捷載入預設範例檔
@@ -307,6 +285,106 @@ with st.sidebar:
                 st.success("已成功匯入查詢條件！")
         except Exception as e:
             st.error(f"解析設定檔失敗: {e}")
+
+# 動態產生主題 CSS
+theme_palette_rules = "\n".join([f".kw-color-{i}, .highlight-{i} {{ background: {theme['palette'][i]} !important; color: #fff !important; }}" for i in range(6)])
+
+st.markdown(f"""
+<style>
+  .block-container {{
+    padding-top: 1.5rem;
+    padding-bottom: 2rem;
+  }}
+  
+  .kw-badge {{
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 28px;
+    height: 38px;
+    border-radius: 6px;
+    font-size: 13px;
+    font-weight: 700;
+    color: #fff;
+    user-select: none;
+    margin-right: 4px;
+  }}
+
+  {theme_palette_rules}
+
+  .highlight {{
+    border-radius: 4px;
+    padding: 1px 5px;
+    font-weight: 600;
+  }}
+
+  .log-container {{
+    border: 1px solid {theme['border_color']};
+    border-radius: 8px;
+    background: {theme['container_bg']};
+    overflow-x: auto;
+    margin-top: 12px;
+    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.35);
+  }}
+
+  .log-table {{
+    width: 100%;
+    border-collapse: collapse;
+    font-family: "JetBrains Mono", "SFMono-Regular", Consolas, "Liberation Mono", Menlo, monospace;
+    font-size: 13px;
+    line-height: 1.55;
+    color: {theme['text_color']};
+    background: {theme['table_bg']};
+  }}
+
+  .log-table tr {{
+    border-bottom: 1px solid {theme['border_color']}33;
+  }}
+
+  .log-table tr.context {{
+    background: {theme['context_bg']};
+  }}
+
+  .log-table tr.match {{
+    background: {theme['match_bg']} !important;
+  }}
+
+  .log-table tr.separator td {{
+    background: {theme['separator_bg']};
+    text-align: center;
+    color: {theme['separator_color']};
+    font-size: 12px;
+    padding: 5px 0;
+    user-select: none;
+    letter-spacing: 4px;
+    border-top: 1px dashed {theme['border_color']};
+    border-bottom: 1px dashed {theme['border_color']};
+  }}
+
+  .log-table .line-no {{
+    width: 75px;
+    min-width: 75px;
+    text-align: right;
+    padding: 3px 12px;
+    color: {theme['line_no_color']};
+    user-select: none;
+    vertical-align: top;
+    border-right: 1px solid {theme['line_no_border']};
+    background: {theme['container_bg']};
+  }}
+
+  .log-table tr.match .line-no {{
+    color: {theme['match_line_no']} !important;
+    font-weight: 700;
+  }}
+
+  .log-table .line-content {{
+    padding: 3px 14px;
+    white-space: pre-wrap;
+    word-break: break-all;
+  }}
+</style>
+""", unsafe_allow_html=True)
 
 
 # ==============================================================================
