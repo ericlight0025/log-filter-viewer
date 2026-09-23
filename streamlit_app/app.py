@@ -1,4 +1,5 @@
 import sys
+import os
 import streamlit as st
 import re
 import html
@@ -219,29 +220,40 @@ with st.sidebar:
     col_demo, col_clear = st.columns(2)
     with col_demo:
         if st.button("📄 載入範例 Log", use_container_width=True):
-            try:
-                with open("sample-server.log", "r", encoding="utf-8", errors="ignore") as f:
-                    content = f.read()
-                st.session_state.file_name = "sample-server.log"
-                lines = content.splitlines()
-                st.session_state.log_lines = lines
-                
-                # 解析時間
-                line_times = []
-                last_time = None
-                for l in lines:
-                    t = parse_time(l)
-                    if t:
-                        last_time = t
-                    line_times.append(last_time)
-                
-                st.session_state.line_times = line_times
-                valid_ts = [t for t in line_times if t is not None]
-                st.session_state.min_time = min(valid_ts) if valid_ts else None
-                st.session_state.max_time = max(valid_ts) if valid_ts else None
-                st.success("已載入範例 sample-server.log！")
-            except Exception as e:
-                st.error(f"讀取範例失敗: {e}")
+            sample_candidates = [
+                os.path.join(os.path.dirname(__file__), "..", "samples", "sample-server.log"),
+                os.path.join(os.path.dirname(__file__), "samples", "sample-server.log"),
+                os.path.join(os.getcwd(), "samples", "sample-server.log"),
+                "samples/sample-server.log",
+                "sample-server.log"
+            ]
+            sample_path = next((p for p in sample_candidates if os.path.exists(p)), None)
+            if sample_path:
+                try:
+                    with open(sample_path, "r", encoding="utf-8", errors="ignore") as f:
+                        content = f.read()
+                    st.session_state.file_name = "sample-server.log"
+                    lines = content.splitlines()
+                    st.session_state.log_lines = lines
+                    
+                    # 解析時間
+                    line_times = []
+                    last_time = None
+                    for l in lines:
+                        t = parse_time(l)
+                        if t:
+                            last_time = t
+                        line_times.append(last_time)
+                    
+                    st.session_state.line_times = line_times
+                    valid_ts = [t for t in line_times if t is not None]
+                    st.session_state.min_time = min(valid_ts) if valid_ts else None
+                    st.session_state.max_time = max(valid_ts) if valid_ts else None
+                    st.success("已載入範例 sample-server.log！")
+                except Exception as e:
+                    st.error(f"讀取範例失敗: {e}")
+            else:
+                st.error("找不到 samples/sample-server.log 檔案！")
 
     with col_clear:
         if st.button("🗑️ 清空資料", use_container_width=True):

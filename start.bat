@@ -28,6 +28,6 @@ echo Local URL: http://localhost:6666
 echo Press Ctrl+C in this window to stop the server.
 echo.
 
-%PY_CMD% -m streamlit run app.py --server.port 6666 --server.headless true
+%PY_CMD% -m streamlit run streamlit_app\app.py --server.port 6666 --server.headless true
 
 pause

@@ -12,7 +12,8 @@ print('==============================================\n')
 # 1. 測試初始載入
 # ----------------------------------------------------------------------
 print('[測試 1/7] 測試應用程式初次啟動...')
-at = AppTest.from_file('app.py')
+app_path = 'streamlit_app/app.py' if os.path.exists('streamlit_app/app.py') else '../streamlit_app/app.py'
+at = AppTest.from_file(app_path)
 at.run()
 assert len(at.exception) == 0, f'初次載入異常: {at.exception}'
 assert any('Log Filter Viewer' in str(t.value) for t in at.title), '未正確顯示標題'
@@ -97,7 +98,8 @@ print('  -> 通過 (±3 行上下文區間合併運算正常，無重疊行號)'
 # 6. 測試純前端 HTML 版本 (index.html / log-filter.html)
 # ----------------------------------------------------------------------
 print('[測試 6/7] 測試純前端單檔版語法與安全高亮邏輯...')
-with open('log-filter.html', 'r', encoding='utf-8') as f:
+html_path = 'standalone_html/log-filter.html' if os.path.exists('standalone_html/log-filter.html') else '../standalone_html/log-filter.html'
+with open(html_path, 'r', encoding='utf-8') as f:
     html_content = f.read()
 assert 'safeHighlight' in html_content, 'HTML 缺少 safeHighlight 安全高亮'
 assert 'mergeRanges' in html_content, 'HTML 缺少 mergeRanges 合併演算法'
@@ -108,9 +110,10 @@ print('  -> 通過 (純前端單檔 HTML 語法完整且合規)')
 # 7. 測試啟動腳本 (start.bat / run.bat)
 # ----------------------------------------------------------------------
 print('[測試 7/7] 測試 Windows start.bat / run.bat 編碼與語法...')
-with open('start.bat', 'r', encoding='utf-8', errors='ignore') as f:
+bat_path = 'start.bat' if os.path.exists('start.bat') else '../start.bat'
+with open(bat_path, 'r', encoding='utf-8', errors='ignore') as f:
     bat_content = f.read()
-assert 'streamlit run app.py' in bat_content, 'start.bat 缺少啟動指令'
+assert 'streamlit run' in bat_content, 'start.bat 缺少啟動指令'
 assert '--explicitly-allowed-ports=6666' in bat_content, 'start.bat 缺少瀏覽器解鎖參數'
 print('  -> 通過 (批次檔無非法字元，已含自動解除瀏覽器 6666 限制)')
 
