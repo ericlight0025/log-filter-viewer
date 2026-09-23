@@ -194,9 +194,41 @@ def safe_highlight(raw_text: str, keywords: list):
     return "".join(out)
 
 
-# ==============================================================================
+def load_demo_log():
+    sample_candidates = [
+        os.path.join(os.path.dirname(__file__), "..", "samples", "sample-server.log"),
+        os.path.join(os.path.dirname(__file__), "samples", "sample-server.log"),
+        os.path.join(os.getcwd(), "samples", "sample-server.log"),
+        "samples/sample-server.log",
+        "sample-server.log"
+    ]
+    sample_path = next((p for p in sample_candidates if os.path.exists(p)), None)
+    if sample_path:
+        try:
+            with open(sample_path, "r", encoding="utf-8", errors="ignore") as f:
+                content = f.read()
+            st.session_state.file_name = "sample-server.log"
+            lines = content.splitlines()
+            st.session_state.log_lines = lines
+            
+            line_times = []
+            last_time = None
+            for l in lines:
+                t = parse_time(l)
+                if t:
+                    last_time = t
+                line_times.append(last_time)
+            
+            st.session_state.line_times = line_times
+            valid_ts = [t for t in line_times if t is not None]
+            st.session_state.min_time = min(valid_ts) if valid_ts else None
+            st.session_state.max_time = max(valid_ts) if valid_ts else None
+            return True
+        except Exception:
+            return False
+    return False
+
 # 初始化 Session State
-# ==============================================================================
 if "keyword_items" not in st.session_state:
     st.session_state.keyword_items = [{"id": str(uuid.uuid4()), "val": "ERROR"}]
 
@@ -207,6 +239,9 @@ if "log_lines" not in st.session_state:
     st.session_state.min_time = None
     st.session_state.max_time = None
 
+# 若 URL 帶有 ?demo=1 且尚未載入日誌，自動載入範例檔 (方便預覽與截圖)
+if st.query_params.get("demo") == "1" and not st.session_state.log_lines:
+    load_demo_log()
 
 # ==============================================================================
 # 側邊欄：檔案載入與預設條件管理
@@ -220,38 +255,8 @@ with st.sidebar:
     col_demo, col_clear = st.columns(2)
     with col_demo:
         if st.button("📄 載入範例 Log", use_container_width=True):
-            sample_candidates = [
-                os.path.join(os.path.dirname(__file__), "..", "samples", "sample-server.log"),
-                os.path.join(os.path.dirname(__file__), "samples", "sample-server.log"),
-                os.path.join(os.getcwd(), "samples", "sample-server.log"),
-                "samples/sample-server.log",
-                "sample-server.log"
-            ]
-            sample_path = next((p for p in sample_candidates if os.path.exists(p)), None)
-            if sample_path:
-                try:
-                    with open(sample_path, "r", encoding="utf-8", errors="ignore") as f:
-                        content = f.read()
-                    st.session_state.file_name = "sample-server.log"
-                    lines = content.splitlines()
-                    st.session_state.log_lines = lines
-                    
-                    # 解析時間
-                    line_times = []
-                    last_time = None
-                    for l in lines:
-                        t = parse_time(l)
-                        if t:
-                            last_time = t
-                        line_times.append(last_time)
-                    
-                    st.session_state.line_times = line_times
-                    valid_ts = [t for t in line_times if t is not None]
-                    st.session_state.min_time = min(valid_ts) if valid_ts else None
-                    st.session_state.max_time = max(valid_ts) if valid_ts else None
-                    st.success("已載入範例 sample-server.log！")
-                except Exception as e:
-                    st.error(f"讀取範例失敗: {e}")
+            if load_demo_log():
+                st.success("已載入範例 sample-server.log！")
             else:
                 st.error("找不到 samples/sample-server.log 檔案！")
 
