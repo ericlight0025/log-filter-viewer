@@ -1,0 +1,1103 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Log Filter Viewer</title>
+<style>
+  /* ===== 全域樣式 ===== */
+  *, *::before, *::after {
+    box-sizing: border-box;
+    margin: 0;
+    padding: 0;
+  }
+
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    background: #0d1117;
+    color: #c9d1d9;
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+  }
+
+  body.drag-active::after {
+    content: '📂 放開以載入 Log 檔案';
+    position: fixed;
+    top: 0; left: 0; width: 100%; height: 100%;
+    background: rgba(13, 17, 23, 0.85);
+    color: #58a6ff;
+    font-size: 32px;
+    font-weight: 600;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 9999;
+    border: 4px dashed #58a6ff;
+    pointer-events: none;
+  }
+
+  /* ===== 頂部標題列 ===== */
+  header {
+    background: #161b22;
+    border-bottom: 1px solid #30363d;
+    padding: 14px 24px;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    flex-shrink: 0;
+  }
+
+  header h1 {
+    font-size: 19px;
+    font-weight: 600;
+    color: #e6edf3;
+    letter-spacing: 0.3px;
+  }
+
+  header .icon {
+    font-size: 22px;
+  }
+
+  /* ===== 控制面板 ===== */
+  .controls {
+    background: #161b22;
+    border-bottom: 1px solid #30363d;
+    padding: 16px 24px;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    flex-shrink: 0;
+  }
+
+  .file-row {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    flex-wrap: wrap;
+  }
+
+  .file-info {
+    font-size: 13px;
+    color: #8b949e;
+  }
+
+  .file-info strong {
+    color: #58a6ff;
+    font-weight: 600;
+  }
+
+  .file-time-span {
+    font-size: 12px;
+    color: #8b949e;
+    background: #21262d;
+    padding: 2px 8px;
+    border-radius: 4px;
+    border: 1px solid #30363d;
+  }
+
+  /* 多關鍵字區塊 */
+  .keywords-section {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+  }
+
+  .keywords-container {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    align-items: center;
+  }
+
+  .keyword-row {
+    display: inline-flex;
+    align-items: center;
+    background: #0d1117;
+    border: 1px solid #30363d;
+    border-radius: 6px;
+    padding: 2px 4px 2px 8px;
+    gap: 6px;
+    transition: border-color 0.15s;
+  }
+
+  .keyword-row:focus-within {
+    border-color: #58a6ff;
+  }
+
+  .kw-badge {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 20px;
+    height: 20px;
+    border-radius: 4px;
+    font-size: 11px;
+    font-weight: 700;
+    color: #fff;
+    user-select: none;
+    flex-shrink: 0;
+  }
+
+  .search-input {
+    min-width: 170px;
+    max-width: 280px;
+    padding: 5px 8px;
+    background: transparent;
+    border: none;
+    color: #e6edf3;
+    font-size: 13px;
+    font-family: "SFMono-Regular", Consolas, "Liberation Mono", Menlo, monospace;
+    outline: none;
+  }
+
+  .search-input::placeholder {
+    color: #484f58;
+  }
+
+  .btn-remove-kw {
+    background: transparent;
+    border: none;
+    color: #8b949e;
+    cursor: pointer;
+    font-size: 14px;
+    line-height: 1;
+    padding: 4px 6px;
+    border-radius: 4px;
+    transition: color 0.15s, background 0.15s;
+  }
+
+  .btn-remove-kw:hover {
+    color: #f85149;
+    background: #21262d;
+  }
+
+  /* 操作按鈕列 */
+  .actions-row {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    flex-wrap: wrap;
+  }
+
+  .btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 6px 14px;
+    border: 1px solid #30363d;
+    border-radius: 6px;
+    font-size: 13px;
+    font-weight: 500;
+    cursor: pointer;
+    transition: background 0.15s, border-color 0.15s, color 0.15s;
+    user-select: none;
+  }
+
+  .btn:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+  }
+
+  .btn-primary {
+    background: #238636;
+    color: #fff;
+    border-color: #238636;
+  }
+
+  .btn-primary:hover:not(:disabled) {
+    background: #2ea043;
+  }
+
+  .btn-secondary {
+    background: #21262d;
+    color: #c9d1d9;
+  }
+
+  .btn-secondary:hover:not(:disabled) {
+    background: #30363d;
+  }
+
+  .btn-add {
+    background: #1f2937;
+    color: #58a6ff;
+    border-color: #388bfd44;
+    font-weight: 600;
+  }
+
+  .btn-add:hover:not(:disabled) {
+    background: #1f6feb22;
+    border-color: #58a6ff;
+  }
+
+  .btn-icon {
+    padding: 5px 9px;
+    background: #21262d;
+    border: 1px solid #30363d;
+    color: #c9d1d9;
+    border-radius: 6px;
+    cursor: pointer;
+    font-size: 13px;
+    transition: background 0.15s;
+  }
+  .btn-icon:hover:not(:disabled) {
+    background: #30363d;
+  }
+
+  .select-group {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 13px;
+    color: #8b949e;
+  }
+
+  .checkbox-label {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    font-size: 13px;
+    color: #c9d1d9;
+    cursor: pointer;
+    user-select: none;
+  }
+
+  .checkbox-label input[type="checkbox"] {
+    accent-color: #238636;
+    cursor: pointer;
+  }
+
+  .custom-select {
+    background: #0d1117;
+    border: 1px solid #30363d;
+    border-radius: 6px;
+    color: #e6edf3;
+    font-size: 13px;
+    padding: 5px 8px;
+    outline: none;
+    cursor: pointer;
+    transition: border-color 0.15s;
+  }
+  
+  input[type="datetime-local"].custom-select {
+    padding: 4px 8px;
+    font-family: "SFMono-Regular", Consolas, monospace;
+    color: #58a6ff;
+  }
+  
+  input[type="datetime-local"]::-webkit-calendar-picker-indicator {
+    filter: invert(1);
+    cursor: pointer;
+  }
+
+  .custom-select:focus {
+    border-color: #58a6ff;
+  }
+
+  .custom-select:disabled {
+    opacity: 0.4;
+    cursor: not-allowed;
+    color: #484f58;
+  }
+
+  .spacer {
+    flex: 1;
+  }
+
+  .match-count {
+    font-size: 13px;
+    color: #8b949e;
+  }
+
+  .match-count strong {
+    color: #f0883e;
+    font-weight: 600;
+  }
+
+  /* ===== Log 顯示區 ===== */
+  .log-container {
+    flex: 1;
+    overflow: auto;
+    padding: 0;
+  }
+
+  .placeholder {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    height: 100%;
+    min-height: 320px;
+    color: #484f58;
+    font-size: 15px;
+    gap: 8px;
+    user-select: none;
+    text-align: center;
+    padding: 20px;
+  }
+
+  .placeholder .emoji {
+    font-size: 42px;
+    margin-bottom: 4px;
+  }
+
+  .log-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-family: "SFMono-Regular", Consolas, "Liberation Mono", Menlo, monospace;
+    font-size: 13px;
+    line-height: 1.55;
+  }
+
+  .log-table tr {
+    border-bottom: 1px solid #21262d;
+  }
+
+  .log-table tr.context { background: #0d1117; }
+  .log-table tr.match { background: #161f30; }
+  .log-table tr.separator td {
+    background: #161b22;
+    text-align: center;
+    color: #484f58;
+    font-size: 12px;
+    padding: 4px 0;
+    user-select: none;
+    letter-spacing: 3px;
+  }
+
+  .log-table .line-no {
+    width: 75px;
+    min-width: 75px;
+    text-align: right;
+    padding: 3px 12px 3px 12px;
+    color: #484f58;
+    user-select: none;
+    vertical-align: top;
+    border-right: 1px solid #21262d;
+    position: sticky;
+    left: 0;
+    background: inherit;
+  }
+
+  .log-table tr.match .line-no {
+    color: #f0883e;
+    font-weight: 600;
+  }
+
+  .log-table .line-content {
+    padding: 3px 14px;
+    white-space: pre;
+  }
+
+  .highlight {
+    border-radius: 3px;
+    padding: 1px 3px;
+    font-weight: 500;
+  }
+  .highlight-0, .kw-color-0 { background: #8957e5; color: #fff; }
+  .highlight-1, .kw-color-1 { background: #b08800; color: #fff; }
+  .highlight-2, .kw-color-2 { background: #1f6feb; color: #fff; }
+  .highlight-3, .kw-color-3 { background: #238636; color: #fff; }
+  .highlight-4, .kw-color-4 { background: #bf4b8a; color: #fff; }
+  .highlight-5, .kw-color-5 { background: #da3633; color: #fff; }
+
+  /* ===== 底部狀態列 ===== */
+  footer {
+    background: #161b22;
+    border-top: 1px solid #30363d;
+    padding: 6px 24px;
+    font-size: 12px;
+    color: #484f58;
+    flex-shrink: 0;
+    display: flex;
+    justify-content: space-between;
+  }
+</style>
+</head>
+<body>
+
+<!-- ===== 標題列 ===== -->
+<header>
+  <span class="icon">📋</span>
+  <h1>Log Filter Viewer</h1>
+</header>
+
+<!-- ===== 控制面板 ===== -->
+<div class="controls">
+  <!-- 檔案選擇列 -->
+  <div class="file-row">
+    <!-- 原生穩定的按鈕觸發模式，避免 label 重複事件與樣式阻擋 -->
+    <button type="button" class="btn btn-primary" id="fileSelectBtn">
+      📂 選擇 Log 檔案
+    </button>
+    <input type="file" id="fileInput" style="display:none;">
+
+    <span class="file-info" id="fileInfo">尚未選擇檔案（也可直接將檔案拖曳至視窗中）</span>
+    <span class="file-time-span" id="fileTimeSpan" style="display:none;"></span>
+    
+    <div class="spacer"></div>
+    
+    <!-- 匯出/匯入條件 -->
+    <button type="button" class="btn btn-secondary" id="exportPresetBtn" title="將目前的查詢條件下載為 JSON 檔">
+      💾 匯出條件
+    </button>
+    <button type="button" class="btn btn-secondary" id="importPresetBtn" title="讀取之前儲存的條件設定檔">
+      📂 匯入條件
+    </button>
+    <input type="file" id="importPresetInput" accept=".json" style="display:none;">
+  </div>
+
+  <!-- 多關鍵字輸入區 -->
+  <div class="keywords-section">
+    <div class="keywords-container" id="keywordsContainer">
+      <!-- 關鍵字項目由 JS 動態生成與管理 -->
+    </div>
+  </div>
+
+  <!-- 搜尋條件列 -->
+  <div class="actions-row">
+    <button type="button" class="btn btn-add" id="addKeywordBtn" title="新增一個關鍵字搜尋框">
+      ➕ 新增關鍵字
+    </button>
+
+    <div class="select-group">
+      <label for="matchMode">條件：</label>
+      <select id="matchMode" class="custom-select">
+        <option value="or">符合任一 (OR)</option>
+        <option value="and">符合全部 (AND)</option>
+      </select>
+    </div>
+
+    <!-- 時間區間過濾 (預設不強制勾選，避免誤過濾) -->
+    <div class="select-group" style="margin-left: 6px; padding-left: 8px; border-left: 1px solid #30363d;">
+      <label class="checkbox-label" title="勾選後才會依指定時間篩選">
+        <input type="checkbox" id="enableTimeFilter">
+        <span>時間過濾：</span>
+      </label>
+      <input type="datetime-local" id="startTime" step="1" class="custom-select" disabled>
+      <span>～</span>
+      <input type="datetime-local" id="endTime" step="1" class="custom-select" disabled>
+      <button type="button" class="btn-icon" id="resetTimeBtn" disabled title="重設回此檔案最初與最後時間">↺</button>
+    </div>
+  </div>
+
+  <!-- 執行與結果列 -->
+  <div class="actions-row">
+    <button type="button" class="btn btn-primary" id="searchBtn">🔍 搜尋</button>
+    <button type="button" class="btn btn-secondary" id="clearBtn">清空條件</button>
+
+    <!-- Context 行數選擇 -->
+    <div class="select-group">
+      <label for="contextLines">前後：</label>
+      <select id="contextLines" class="custom-select">
+        <option value="0">0行</option>
+        <option value="3">±3行</option>
+        <option value="5" selected>±5行</option>
+        <option value="10">±10行</option>
+        <option value="20">±20行</option>
+        <option value="50">±50行</option>
+      </select>
+    </div>
+
+    <div class="spacer"></div>
+    <span class="match-count" id="matchCount"></span>
+    <button type="button" class="btn btn-secondary" id="copyBtn" disabled title="將目前的過濾結果複製為純文字">
+      📋 複製結果
+    </button>
+  </div>
+</div>
+
+<!-- ===== Log 顯示區 ===== -->
+<div class="log-container" id="logContainer">
+  <div class="placeholder" id="placeholder">
+    <span class="emoji">📂</span>
+    <span>請點擊上方「選擇 Log 檔案」，或直接將檔案拖曳進視窗</span>
+  </div>
+</div>
+
+<!-- ===== 底部狀態列 ===== -->
+<footer>
+  <span id="footerLeft">Log Filter Viewer — 純前端版本，支援多關鍵字、時間範圍、條件匯出/匯入與複製</span>
+  <span id="footerRight"></span>
+</footer>
+
+<script>
+// ===================================================================
+//  Log Filter Viewer (穩健修復版)
+// ===================================================================
+
+const fileSelectBtn     = document.getElementById('fileSelectBtn');
+const fileInput         = document.getElementById('fileInput');
+const fileInfo          = document.getElementById('fileInfo');
+const fileTimeSpan      = document.getElementById('fileTimeSpan');
+const keywordsContainer = document.getElementById('keywordsContainer');
+const addKeywordBtn     = document.getElementById('addKeywordBtn');
+const matchModeSel      = document.getElementById('matchMode');
+
+const enableTimeFilter  = document.getElementById('enableTimeFilter');
+const startTimeInput    = document.getElementById('startTime');
+const endTimeInput      = document.getElementById('endTime');
+const resetTimeBtn      = document.getElementById('resetTimeBtn');
+
+const searchBtn         = document.getElementById('searchBtn');
+const clearBtn          = document.getElementById('clearBtn');
+const copyBtn           = document.getElementById('copyBtn');
+const contextSel        = document.getElementById('contextLines');
+const matchCount        = document.getElementById('matchCount');
+const logContainer      = document.getElementById('logContainer');
+const placeholder       = document.getElementById('placeholder');
+const footerRight       = document.getElementById('footerRight');
+
+const exportPresetBtn   = document.getElementById('exportPresetBtn');
+const importPresetBtn   = document.getElementById('importPresetBtn');
+const importPresetInput = document.getElementById('importPresetInput');
+
+// 全域狀態
+let logLines = [];
+let lineTimestamps = new Float64Array(0);
+let fileStartTime = null;
+let fileEndTime = null;
+let fileName = '';
+let currentMergedRanges = [];
+
+// =====================
+// 1. 穩健檔案選取與拖曳
+// =====================
+
+// 點擊按鈕手動觸發 fileInput，並在每次點擊時清除 value，確保同一檔案可重複載入
+fileSelectBtn.addEventListener('click', () => {
+  fileInput.value = '';
+  fileInput.click();
+});
+
+fileInput.addEventListener('change', function () {
+  if (this.files && this.files.length > 0) {
+    loadFile(this.files[0]);
+  }
+});
+
+// 拖曳上傳
+document.body.addEventListener('dragover', (e) => {
+  e.preventDefault();
+  document.body.classList.add('drag-active');
+});
+
+document.body.addEventListener('dragleave', (e) => {
+  if (e.clientX === 0 || e.clientY === 0) {
+    document.body.classList.remove('drag-active');
+  }
+});
+
+document.body.addEventListener('drop', (e) => {
+  e.preventDefault();
+  document.body.classList.remove('drag-active');
+  if (e.dataTransfer && e.dataTransfer.files && e.dataTransfer.files.length > 0) {
+    try {
+      fileInput.files = e.dataTransfer.files;
+    } catch (_) {}
+    loadFile(e.dataTransfer.files[0]);
+  }
+});
+
+// =====================
+// 2. 檔案解析與載入
+// =====================
+function loadFile(file) {
+  if (!file) return;
+  fileName = file.name;
+
+  fileInfo.innerHTML = `正在讀取 <strong>${escapeHtml(fileName)}</strong>...`;
+
+  const reader = new FileReader();
+
+  reader.onload = function (e) {
+    const text = e.target.result || '';
+    logLines = text.split(/\r?\n/);
+
+    // 建立時間戳記索引
+    lineTimestamps = new Float64Array(logLines.length);
+    fileStartTime = null;
+    fileEndTime = null;
+    let lastTime = 0;
+
+    for (let i = 0; i < logLines.length; i++) {
+      const t = extractTime(logLines[i]);
+      if (t > 0) {
+        lastTime = t;
+        if (fileStartTime === null) fileStartTime = t;
+        fileEndTime = t;
+      }
+      lineTimestamps[i] = lastTime;
+    }
+
+    // 更新介面檔案資訊
+    fileInfo.innerHTML = `檔案：<strong>${escapeHtml(fileName)}</strong> &nbsp;|&nbsp; 共 ${logLines.length.toLocaleString()} 行`;
+
+    if (fileStartTime && fileEndTime) {
+      startTimeInput.value = formatDatetimeLocal(fileStartTime);
+      // 結束時間自動加 1 秒確保完整包含最後一秒的毫秒
+      endTimeInput.value = formatDatetimeLocal(fileEndTime + 1000);
+      fileTimeSpan.style.display = 'inline-block';
+      fileTimeSpan.textContent = `範圍: ${formatDisplayTime(fileStartTime)} ~ ${formatDisplayTime(fileEndTime)}`;
+    } else {
+      fileTimeSpan.style.display = 'none';
+      fileTimeSpan.textContent = '';
+    }
+
+    footerRight.textContent = `已載入 ${logLines.length.toLocaleString()} 行`;
+    copyBtn.disabled = true;
+
+    // 清空舊結果，引導使用者搜尋
+    matchCount.innerHTML = '';
+    currentMergedRanges = [];
+    logContainer.innerHTML = '';
+
+    // 若使用者原先已填好關鍵字，直接自動觸發搜尋；否則提示使用者輸入
+    const activeKeywords = getKeywords();
+    if (activeKeywords.length > 0) {
+      searchLog();
+    } else {
+      placeholder.style.display = '';
+      placeholder.innerHTML = `<span class="emoji">✅</span><span>已成功載入 <strong>${escapeHtml(fileName)}</strong> (${logLines.length.toLocaleString()} 行)<br><br>請在上方輸入關鍵字後點擊「🔍 搜尋」</span>`;
+      logContainer.appendChild(placeholder);
+      const firstInput = keywordsContainer.querySelector('.search-input');
+      if (firstInput) firstInput.focus();
+    }
+  };
+
+  reader.onerror = function () {
+    fileInfo.innerHTML = '<span style="color:#f85149;">讀取檔案失敗，請檢查檔案權限後重試</span>';
+  };
+
+  reader.readAsText(file);
+}
+
+// =====================
+// 3. 時間解析與格式化
+// =====================
+
+// 支援常見 Log4j / Spring / Linux 格式 (包含逗號與點號毫秒、斜線與橫線日期)
+const timeRegex = /(\d{4}[-/]\d{2}[-/]\d{2}[ T]\d{2}:\d{2}:\d{2}(?:[.,]\d+)?)/;
+
+function extractTime(line) {
+  if (!line) return 0;
+  const prefix = line.substring(0, 120);
+  const match = prefix.match(timeRegex);
+  if (match) {
+    let dateStr = match[1];
+    // 處理 Log4j 常見的逗號毫秒: 2026-09-24 00:00:01,123 -> .123
+    dateStr = dateStr.replace(',', '.');
+    // 標準化斜線日期: 2026/09/24 -> 2026-09-24
+    dateStr = dateStr.replace(/\//g, '-');
+    // 標準化空白間隔: '2026-09-24 00:00:01' -> '2026-09-24T00:00:01'
+    if (dateStr.length >= 19 && dateStr[10] === ' ') {
+      dateStr = dateStr.substring(0, 10) + 'T' + dateStr.substring(11);
+    }
+    const parsed = Date.parse(dateStr);
+    if (!isNaN(parsed)) return parsed;
+  }
+  return 0;
+}
+
+function formatDatetimeLocal(timestamp) {
+  const d = new Date(timestamp);
+  const pad = n => n.toString().padStart(2, '0');
+  return `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`;
+}
+
+function formatDisplayTime(timestamp) {
+  const d = new Date(timestamp);
+  const pad = n => n.toString().padStart(2, '0');
+  return `${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`;
+}
+
+// 時間過濾開關
+enableTimeFilter.addEventListener('change', function() {
+  const enabled = this.checked;
+  startTimeInput.disabled = !enabled;
+  endTimeInput.disabled   = !enabled;
+  resetTimeBtn.disabled   = !enabled;
+  if (logLines.length > 0 && getKeywords().length > 0) {
+    searchLog();
+  }
+});
+
+resetTimeBtn.addEventListener('click', () => {
+  if (fileStartTime && fileEndTime) {
+    startTimeInput.value = formatDatetimeLocal(fileStartTime);
+    endTimeInput.value = formatDatetimeLocal(fileEndTime + 1000);
+    searchLog();
+  }
+});
+
+// =====================
+// 4. 關鍵字列管理
+// =====================
+function addKeywordRow(initialValue = '', shouldFocus = false) {
+  const row = document.createElement('div');
+  row.className = 'keyword-row';
+
+  const badge = document.createElement('span');
+  badge.className = 'kw-badge';
+
+  const input = document.createElement('input');
+  input.type = 'text';
+  input.className = 'search-input';
+  input.placeholder = '輸入關鍵字…';
+  input.value = initialValue;
+
+  input.addEventListener('keydown', function (e) {
+    if (e.key === 'Enter') {
+      e.preventDefault();
+      searchLog();
+    }
+  });
+
+  const removeBtn = document.createElement('button');
+  removeBtn.type = 'button';
+  removeBtn.className = 'btn-remove-kw';
+  removeBtn.title = '移除此關鍵字';
+  removeBtn.textContent = '✕';
+  removeBtn.addEventListener('click', function () {
+    row.remove();
+    updateKeywordRowsUI();
+    if (logLines.length > 0) searchLog();
+  });
+
+  row.appendChild(badge);
+  row.appendChild(input);
+  row.appendChild(removeBtn);
+  keywordsContainer.appendChild(row);
+
+  updateKeywordRowsUI();
+  if (shouldFocus) input.focus();
+}
+
+function updateKeywordRowsUI() {
+  const rows = keywordsContainer.querySelectorAll('.keyword-row');
+  const count = rows.length;
+  rows.forEach((row, idx) => {
+    const badge = row.querySelector('.kw-badge');
+    badge.className = `kw-badge kw-color-${idx % 6}`;
+    badge.textContent = `${idx + 1}`;
+    row.querySelector('.search-input').placeholder = `關鍵字 ${idx + 1} (例如 ${idx === 0 ? 'ERROR' : idx === 1 ? 'timeout' : 'fail'})`;
+    row.querySelector('.btn-remove-kw').style.display = count > 1 ? '' : 'none';
+  });
+}
+
+function getKeywords() {
+  const list = [];
+  keywordsContainer.querySelectorAll('.search-input').forEach(input => {
+    const val = input.value.trim();
+    if (val) list.push(val);
+  });
+  return list;
+}
+
+addKeywordRow('', false);
+
+addKeywordBtn.addEventListener('click', () => addKeywordRow('', true));
+
+// =====================
+// 5. 搜尋核心邏輯
+// =====================
+function searchLog() {
+  if (logLines.length === 0) {
+    alert('請先選擇或拖入 Log 檔案！');
+    return;
+  }
+
+  const keywords = getKeywords();
+  const isTimeFilterOn = enableTimeFilter.checked;
+  const stStr = startTimeInput.value;
+  const etStr = endTimeInput.value;
+
+  // 沒有關鍵字且未開啟時間過濾
+  if (keywords.length === 0 && !isTimeFilterOn) {
+    logContainer.innerHTML = '';
+    placeholder.style.display = '';
+    placeholder.innerHTML = '<span class="emoji">💡</span><span>請輸入至少一個關鍵字，或勾選「時間過濾」以開始搜尋</span>';
+    logContainer.appendChild(placeholder);
+    matchCount.innerHTML = '';
+    copyBtn.disabled = true;
+    return;
+  }
+
+  const matchMode = matchModeSel.value;
+  const contextSize = parseInt(contextSel.value, 10);
+
+  const matches = findMatches(keywords, matchMode, isTimeFilterOn, stStr, etStr);
+  matchCount.innerHTML = `符合: <strong>${matches.length.toLocaleString()}</strong> 行`;
+
+  if (matches.length === 0) {
+    currentMergedRanges = [];
+    logContainer.innerHTML = '';
+    placeholder.style.display = '';
+    placeholder.innerHTML = '<span class="emoji">🤷</span><span>找不到符合條件的結果</span>';
+    logContainer.appendChild(placeholder);
+    copyBtn.disabled = true;
+    return;
+  }
+
+  // 大量結果保護
+  if (matches.length > 50000) {
+    currentMergedRanges = [];
+    logContainer.innerHTML = '';
+    placeholder.style.display = '';
+    placeholder.innerHTML = `<span class="emoji">⚠️</span><span>符合行數過多 (${matches.length.toLocaleString()} 行)。<br><br>請增加關鍵字或縮小時間範圍，避免瀏覽器效能過載。</span>`;
+    logContainer.appendChild(placeholder);
+    copyBtn.disabled = true;
+    return;
+  }
+
+  const ranges = matches.map(m => [
+    Math.max(0, m - contextSize),
+    Math.min(logLines.length - 1, m + contextSize)
+  ]);
+
+  currentMergedRanges = mergeRanges(ranges);
+  renderResults(currentMergedRanges, new Set(matches), keywords);
+  copyBtn.disabled = false;
+}
+
+function findMatches(keywords, matchMode, isTimeFilterOn, stStr, etStr) {
+  const cleanKws = keywords.map(k => k.toLowerCase());
+  const result = [];
+  
+  let startMs = 0;
+  let endMs = Infinity;
+  
+  if (isTimeFilterOn) {
+    startMs = stStr ? new Date(stStr).getTime() : 0;
+    endMs   = etStr ? new Date(etStr).getTime() : Infinity;
+  }
+
+  for (let i = 0; i < logLines.length; i++) {
+    // 1. 時間篩選
+    if (isTimeFilterOn) {
+      const lineTime = lineTimestamps[i];
+      if (lineTime > 0) {
+        if (lineTime < startMs || lineTime > endMs) continue;
+      } else if (startMs > 0) {
+        continue;
+      }
+    }
+
+    // 2. 關鍵字比對
+    let isMatch = true;
+    if (cleanKws.length > 0) {
+      const lineLower = logLines[i].toLowerCase();
+      isMatch = matchMode === 'and'
+        ? cleanKws.every(kw => lineLower.includes(kw))
+        : cleanKws.some(kw => lineLower.includes(kw));
+    }
+
+    if (isMatch) result.push(i);
+  }
+
+  return result;
+}
+
+function mergeRanges(ranges) {
+  if (ranges.length === 0) return [];
+  const sorted = ranges.slice().sort((a, b) => a[0] - b[0]);
+  const merged = [sorted[0].slice()];
+
+  for (let i = 1; i < sorted.length; i++) {
+    const last = merged[merged.length - 1];
+    const curr = sorted[i];
+    if (curr[0] <= last[1] + 1) {
+      last[1] = Math.max(last[1], curr[1]);
+    } else {
+      merged.push(curr.slice());
+    }
+  }
+
+  return merged;
+}
+
+// =====================
+// 6. 渲染與安全高亮
+// =====================
+function renderResults(mergedRanges, matchSet, keywords) {
+  placeholder.style.display = 'none';
+
+  const uniqueKws = Array.from(new Set(keywords.map(k => k.trim()).filter(Boolean)));
+  const kwMeta = uniqueKws.map(raw => ({
+    raw: raw,
+    colorIdx: keywords.indexOf(raw) % 6
+  })).sort((a, b) => b.raw.length - a.raw.length);
+
+  const pattern = kwMeta.map(item => item.raw.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')).join('|');
+  const splitRegex = pattern ? new RegExp(`(${pattern})`, 'gi') : null;
+
+  const fragments = ['<table class="log-table">'];
+
+  for (let ri = 0; ri < mergedRanges.length; ri++) {
+    const [start, end] = mergedRanges[ri];
+    if (ri > 0) fragments.push('<tr class="separator"><td colspan="2">⋯⋯⋯⋯⋯⋯</td></tr>');
+
+    for (let i = start; i <= end; i++) {
+      const isMatch = matchSet.has(i);
+      const rowClass = isMatch ? 'match' : 'context';
+      const displayContent = isMatch && splitRegex
+        ? safeHighlight(logLines[i], splitRegex, kwMeta)
+        : escapeHtml(logLines[i]);
+
+      fragments.push(
+        `<tr class="${rowClass}">
+          <td class="line-no">${i + 1}</td>
+          <td class="line-content">${displayContent}</td>
+        </tr>`
+      );
+    }
+  }
+
+  fragments.push('</table>');
+  logContainer.innerHTML = fragments.join('');
+}
+
+function safeHighlight(rawText, splitRegex, kwMeta) {
+  const parts = rawText.split(splitRegex);
+  let html = '';
+  for (let i = 0; i < parts.length; i++) {
+    if (!parts[i]) continue;
+    if (i % 2 === 0) {
+      html += escapeHtml(parts[i]);
+    } else {
+      const matchLower = parts[i].toLowerCase();
+      const found = kwMeta.find(k => k.raw.toLowerCase() === matchLower);
+      const colorIdx = found ? found.colorIdx : 0;
+      html += `<span class="highlight highlight-${colorIdx}">${escapeHtml(parts[i])}</span>`;
+    }
+  }
+  return html;
+}
+
+// =====================
+// 7. 一鍵複製功能
+// =====================
+function copyToClipboard() {
+  if (currentMergedRanges.length === 0 || logLines.length === 0) return;
+  const textLines = [];
+  for (let ri = 0; ri < currentMergedRanges.length; ri++) {
+    const [start, end] = currentMergedRanges[ri];
+    if (ri > 0) textLines.push('--------------------------------------------------');
+    for (let i = start; i <= end; i++) {
+      textLines.push(`${(i + 1).toString().padStart(6, ' ')} | ${logLines[i]}`);
+    }
+  }
+  navigator.clipboard.writeText(textLines.join('\n')).then(() => {
+    const origHtml = copyBtn.innerHTML;
+    copyBtn.innerHTML = '✅ 已複製純文字';
+    setTimeout(() => { copyBtn.innerHTML = origHtml; }, 2000);
+  }).catch(() => alert('複製失敗，可能瀏覽器阻擋 Clipboard 權限。'));
+}
+
+// =====================
+// 8. 條件匯出與匯入
+// =====================
+function exportPreset() {
+  const preset = {
+    keywords: getKeywords(),
+    matchMode: matchModeSel.value,
+    contextLines: contextSel.value,
+    enableTimeFilter: enableTimeFilter.checked,
+    startTime: startTimeInput.value,
+    endTime: endTimeInput.value
+  };
+
+  const blob = new Blob([JSON.stringify(preset, null, 2)], { type: 'application/json' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  const now = new Date();
+  const pad = n => n.toString().padStart(2, '0');
+  a.download = `log-preset-${now.getFullYear()}${pad(now.getMonth()+1)}${pad(now.getDate())}_${pad(now.getHours())}${pad(now.getMinutes())}.json`;
+  a.href = url;
+  a.click();
+  URL.revokeObjectURL(url);
+}
+
+importPresetBtn.addEventListener('click', () => {
+  importPresetInput.value = '';
+  importPresetInput.click();
+});
+
+importPresetInput.addEventListener('change', function (e) {
+  const file = e.target.files[0];
+  if (!file) return;
+
+  const reader = new FileReader();
+  reader.onload = function (evt) {
+    try {
+      const preset = JSON.parse(evt.target.result);
+
+      if (preset.matchMode) matchModeSel.value = preset.matchMode;
+      if (preset.contextLines) contextSel.value = preset.contextLines;
+      
+      if (preset.enableTimeFilter !== undefined) {
+        enableTimeFilter.checked = !!preset.enableTimeFilter;
+        startTimeInput.disabled = !enableTimeFilter.checked;
+        endTimeInput.disabled = !enableTimeFilter.checked;
+        resetTimeBtn.disabled = !enableTimeFilter.checked;
+      }
+      if (preset.startTime) startTimeInput.value = preset.startTime;
+      if (preset.endTime) endTimeInput.value = preset.endTime;
+
+      if (Array.isArray(preset.keywords)) {
+        keywordsContainer.innerHTML = '';
+        preset.keywords.forEach(kw => addKeywordRow(kw, false));
+        if (preset.keywords.length === 0) addKeywordRow('', false);
+      }
+
+      if (logLines.length > 0) searchLog();
+    } catch (_) {
+      alert('無效的條件設定檔 (JSON 解析失敗)');
+    }
+  };
+  reader.readAsText(file);
+});
+
+exportPresetBtn.addEventListener('click', exportPreset);
+
+// =====================
+// 9. 事件綁定與清理
+// =====================
+function clearSearch() {
+  keywordsContainer.innerHTML = '';
+  addKeywordRow('', true);
+  enableTimeFilter.checked = false;
+  startTimeInput.disabled = true;
+  endTimeInput.disabled = true;
+  resetTimeBtn.disabled = true;
+  matchCount.innerHTML = '';
+  currentMergedRanges = [];
+  logContainer.innerHTML = '';
+
+  if (logLines.length > 0) {
+    placeholder.innerHTML = `<span class="emoji">🔍</span><span>已載入 <strong>${escapeHtml(fileName)}</strong>，請輸入關鍵字後搜尋</span>`;
+  } else {
+    placeholder.innerHTML = '<span class="emoji">📂</span><span>請點擊上方「選擇 Log 檔案」，或直接將檔案拖曳進視窗</span>';
+  }
+  placeholder.style.display = '';
+  logContainer.appendChild(placeholder);
+  copyBtn.disabled = true;
+}
+
+function escapeHtml(text) {
+  if (!text) return '';
+  return text.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+}
+
+matchModeSel.addEventListener('change', () => { if (logLines.length > 0) searchLog(); });
+contextSel.addEventListener('change', () => { if (logLines.length > 0) searchLog(); });
+startTimeInput.addEventListener('change', () => { if (logLines.length > 0) searchLog(); });
+endTimeInput.addEventListener('change', () => { if (logLines.length > 0) searchLog(); });
+
+searchBtn.addEventListener('click', searchLog);
+clearBtn.addEventListener('click', clearSearch);
+copyBtn.addEventListener('click', copyToClipboard);
+
+</script>
+</body>
+</html>

@@ -1,0 +1,247 @@
+2026-09-24 00:00:01.123 [main] INFO  com.myapp.Application - Starting MyApp v3.2.1 on prod-server-01
+2026-09-24 00:00:01.234 [main] INFO  com.myapp.Application - Java version: 17.0.8, vendor: Eclipse Adoptium
+2026-09-24 00:00:01.345 [main] INFO  com.myapp.Application - OS: Linux 5.15.0-82-generic amd64
+2026-09-24 00:00:01.456 [main] INFO  com.myapp.config.AppConfig - Loading configuration from /etc/myapp/application.yml
+2026-09-24 00:00:01.567 [main] INFO  com.myapp.config.AppConfig - Active profiles: production
+2026-09-24 00:00:01.678 [main] INFO  com.myapp.config.AppConfig - Server port: 8080
+2026-09-24 00:00:01.789 [main] INFO  com.myapp.config.AppConfig - Max thread pool size: 200
+2026-09-24 00:00:02.012 [main] INFO  com.myapp.db.HikariPoolManager - Initializing HikariCP connection pool
+2026-09-24 00:00:02.234 [main] INFO  com.myapp.db.HikariPoolManager - JDBC URL: jdbc:postgresql://db-master.internal:5432/myapp_prod
+2026-09-24 00:00:02.456 [main] INFO  com.myapp.db.HikariPoolManager - Pool size: min=10, max=50, idle-timeout=600000ms
+2026-09-24 00:00:02.678 [main] INFO  com.myapp.db.HikariPoolManager - Connection pool initialized successfully
+2026-09-24 00:00:02.789 [main] INFO  com.myapp.cache.RedisManager - Connecting to Redis cluster: redis-cluster.internal:6379
+2026-09-24 00:00:03.012 [main] INFO  com.myapp.cache.RedisManager - Redis connection established, ping: 2ms
+2026-09-24 00:00:03.123 [main] INFO  com.myapp.mq.KafkaConsumerManager - Initializing Kafka consumers for topics: [orders, payments, notifications]
+2026-09-24 00:00:03.345 [main] INFO  com.myapp.mq.KafkaConsumerManager - Kafka bootstrap servers: kafka-01.internal:9092,kafka-02.internal:9092
+2026-09-24 00:00:03.567 [main] INFO  com.myapp.mq.KafkaConsumerManager - Consumer group: myapp-prod-group
+2026-09-24 00:00:03.789 [main] INFO  com.myapp.Application - Application started in 2.666 seconds
+2026-09-24 00:00:03.890 [main] INFO  com.myapp.Application - Ready to accept connections on port 8080
+2026-09-24 00:00:05.123 [http-nio-8080-exec-1] INFO  com.myapp.filter.RequestLogger - GET /api/health 200 3ms
+2026-09-24 00:00:05.234 [http-nio-8080-exec-2] INFO  com.myapp.filter.RequestLogger - GET /api/health 200 2ms
+2026-09-24 00:00:10.345 [http-nio-8080-exec-3] INFO  com.myapp.filter.RequestLogger - POST /api/v1/auth/login 200 45ms userId=user_1001
+2026-09-24 00:00:10.456 [http-nio-8080-exec-3] INFO  com.myapp.service.AuthService - User login successful: user_1001 from IP 203.145.67.89
+2026-09-24 00:00:12.567 [http-nio-8080-exec-4] INFO  com.myapp.filter.RequestLogger - GET /api/v1/users/me 200 12ms userId=user_1001
+2026-09-24 00:00:15.678 [http-nio-8080-exec-5] INFO  com.myapp.filter.RequestLogger - GET /api/v1/orders?page=1&size=20 200 89ms userId=user_1001
+2026-09-24 00:00:15.789 [http-nio-8080-exec-5] DEBUG com.myapp.repository.OrderRepository - Query executed: SELECT * FROM orders WHERE user_id=1001 LIMIT 20 OFFSET 0 (87ms, 20 rows)
+2026-09-24 00:00:18.012 [http-nio-8080-exec-6] INFO  com.myapp.filter.RequestLogger - POST /api/v1/orders 201 234ms userId=user_1001
+2026-09-24 00:00:18.123 [http-nio-8080-exec-6] INFO  com.myapp.service.OrderService - Order created: ORD-20260924-00001, amount=2580.00 TWD
+2026-09-24 00:00:18.234 [kafka-producer-1] INFO  com.myapp.mq.KafkaProducer - Message sent to topic [orders]: key=ORD-20260924-00001, partition=3
+2026-09-24 00:00:20.345 [http-nio-8080-exec-7] INFO  com.myapp.filter.RequestLogger - POST /api/v1/auth/login 200 38ms userId=user_2045
+2026-09-24 00:00:22.456 [http-nio-8080-exec-8] INFO  com.myapp.filter.RequestLogger - GET /api/v1/products?category=electronics 200 67ms
+2026-09-24 00:00:25.567 [http-nio-8080-exec-9] WARN  com.myapp.filter.RateLimiter - Rate limit approaching for IP 103.22.45.67: 85/100 requests per minute
+2026-09-24 00:00:28.678 [http-nio-8080-exec-10] INFO  com.myapp.filter.RequestLogger - POST /api/v1/payments 200 1234ms userId=user_1001
+2026-09-24 00:00:28.789 [http-nio-8080-exec-10] INFO  com.myapp.service.PaymentService - Payment processed: PAY-20260924-00001, gateway=ecpay, status=SUCCESS
+2026-09-24 00:00:28.890 [kafka-producer-1] INFO  com.myapp.mq.KafkaProducer - Message sent to topic [payments]: key=PAY-20260924-00001, partition=1
+2026-09-24 00:00:30.012 [scheduler-1] INFO  com.myapp.scheduler.HealthChecker - System health check: CPU=45%, Memory=62%, Disk=38%
+2026-09-24 00:00:30.123 [scheduler-1] INFO  com.myapp.scheduler.HealthChecker - Database pool: active=12, idle=38, pending=0
+2026-09-24 00:00:30.234 [scheduler-1] INFO  com.myapp.scheduler.HealthChecker - Redis connection: OK, latency=1ms
+2026-09-24 00:00:35.345 [http-nio-8080-exec-11] INFO  com.myapp.filter.RequestLogger - POST /api/v1/auth/login 401 15ms
+2026-09-24 00:00:35.456 [http-nio-8080-exec-11] WARN  com.myapp.service.AuthService - Failed login attempt for user: admin@myapp.com from IP 185.234.12.99
+2026-09-24 00:00:36.567 [http-nio-8080-exec-12] INFO  com.myapp.filter.RequestLogger - POST /api/v1/auth/login 401 12ms
+2026-09-24 00:00:36.678 [http-nio-8080-exec-12] WARN  com.myapp.service.AuthService - Failed login attempt for user: admin@myapp.com from IP 185.234.12.99
+2026-09-24 00:00:37.789 [http-nio-8080-exec-13] INFO  com.myapp.filter.RequestLogger - POST /api/v1/auth/login 401 11ms
+2026-09-24 00:00:37.890 [http-nio-8080-exec-13] WARN  com.myapp.service.AuthService - Failed login attempt for user: admin@myapp.com from IP 185.234.12.99
+2026-09-24 00:00:37.901 [http-nio-8080-exec-13] ERROR com.myapp.service.AuthService - Account locked due to 3 consecutive failed login attempts: admin@myapp.com, IP=185.234.12.99
+2026-09-24 00:00:37.912 [http-nio-8080-exec-13] WARN  com.myapp.security.ThreatDetector - Potential brute force attack detected from IP 185.234.12.99, added to watchlist
+2026-09-24 00:00:40.123 [http-nio-8080-exec-14] INFO  com.myapp.filter.RequestLogger - GET /api/v1/orders/ORD-20260924-00001 200 23ms userId=user_1001
+2026-09-24 00:00:42.234 [http-nio-8080-exec-15] INFO  com.myapp.filter.RequestLogger - PUT /api/v1/users/me 200 56ms userId=user_2045
+2026-09-24 00:00:45.345 [kafka-consumer-orders-1] INFO  com.myapp.mq.OrderEventHandler - Processing order event: ORD-20260924-00001, action=CREATED
+2026-09-24 00:00:45.456 [kafka-consumer-orders-1] INFO  com.myapp.service.InventoryService - Stock reserved for order ORD-20260924-00001: [SKU-A100 x2, SKU-B200 x1]
+2026-09-24 00:00:48.567 [http-nio-8080-exec-16] INFO  com.myapp.filter.RequestLogger - POST /api/v1/orders 201 189ms userId=user_2045
+2026-09-24 00:00:48.678 [http-nio-8080-exec-16] INFO  com.myapp.service.OrderService - Order created: ORD-20260924-00002, amount=15600.00 TWD
+2026-09-24 00:00:50.789 [http-nio-8080-exec-17] INFO  com.myapp.filter.RequestLogger - GET /api/v1/notifications 200 34ms userId=user_1001
+2026-09-24 00:00:55.012 [http-nio-8080-exec-18] INFO  com.myapp.filter.RequestLogger - DELETE /api/v1/cart/items/12345 200 28ms userId=user_3078
+2026-09-24 00:00:58.123 [http-nio-8080-exec-19] INFO  com.myapp.filter.RequestLogger - POST /api/v1/auth/login 200 42ms userId=user_3078
+2026-09-24 00:01:00.234 [scheduler-1] INFO  com.myapp.scheduler.HealthChecker - System health check: CPU=52%, Memory=65%, Disk=38%
+2026-09-24 00:01:02.345 [http-nio-8080-exec-20] INFO  com.myapp.filter.RequestLogger - POST /api/v1/payments 200 2345ms userId=user_2045
+2026-09-24 00:01:02.456 [http-nio-8080-exec-20] INFO  com.myapp.service.PaymentService - Payment processed: PAY-20260924-00002, gateway=linepay, status=SUCCESS
+2026-09-24 00:01:05.567 [http-nio-8080-exec-1] INFO  com.myapp.filter.RequestLogger - GET /api/v1/products/SKU-A100 200 18ms
+2026-09-24 00:01:08.678 [http-nio-8080-exec-2] INFO  com.myapp.filter.RequestLogger - POST /api/v1/orders 500 3456ms userId=user_3078
+2026-09-24 00:01:08.789 [http-nio-8080-exec-2] ERROR com.myapp.service.OrderService - Failed to create order for user_3078: database connection timeout
+2026-09-24 00:01:08.790 [http-nio-8080-exec-2] ERROR com.myapp.service.OrderService - org.postgresql.util.PSQLException: Connection timed out after 30000ms
+2026-09-24 00:01:08.791 [http-nio-8080-exec-2] ERROR com.myapp.service.OrderService -     at org.postgresql.core.v3.ConnectionFactoryImpl.openConnectionImpl(ConnectionFactoryImpl.java:331)
+2026-09-24 00:01:08.792 [http-nio-8080-exec-2] ERROR com.myapp.service.OrderService -     at org.postgresql.core.ConnectionFactory.openConnection(ConnectionFactory.java:49)
+2026-09-24 00:01:08.793 [http-nio-8080-exec-2] ERROR com.myapp.service.OrderService -     at com.myapp.repository.OrderRepository.save(OrderRepository.java:87)
+2026-09-24 00:01:08.794 [http-nio-8080-exec-2] ERROR com.myapp.service.OrderService -     at com.myapp.service.OrderService.createOrder(OrderService.java:142)
+2026-09-24 00:01:08.795 [http-nio-8080-exec-2] ERROR com.myapp.service.OrderService -     at com.myapp.controller.OrderController.create(OrderController.java:65)
+2026-09-24 00:01:09.012 [http-nio-8080-exec-2] WARN  com.myapp.db.HikariPoolManager - Connection pool exhaustion warning: active=48, idle=2, pending=5
+2026-09-24 00:01:10.123 [http-nio-8080-exec-3] INFO  com.myapp.filter.RequestLogger - GET /api/v1/orders?page=1&size=20 200 156ms userId=user_2045
+2026-09-24 00:01:12.234 [http-nio-8080-exec-4] INFO  com.myapp.filter.RequestLogger - POST /api/v1/auth/login 200 35ms userId=user_4102
+2026-09-24 00:01:15.345 [http-nio-8080-exec-5] INFO  com.myapp.filter.RequestLogger - GET /api/v1/products?category=clothing&sort=price_asc 200 78ms
+2026-09-24 00:01:18.456 [http-nio-8080-exec-6] INFO  com.myapp.filter.RequestLogger - POST /api/v1/orders 201 198ms userId=user_4102
+2026-09-24 00:01:18.567 [http-nio-8080-exec-6] INFO  com.myapp.service.OrderService - Order created: ORD-20260924-00003, amount=890.00 TWD
+2026-09-24 00:01:20.678 [http-nio-8080-exec-7] INFO  com.myapp.filter.RequestLogger - POST /api/v1/orders 500 5012ms userId=user_1001
+2026-09-24 00:01:20.789 [http-nio-8080-exec-7] ERROR com.myapp.service.OrderService - Failed to create order for user_1001: database connection timeout
+2026-09-24 00:01:20.790 [http-nio-8080-exec-7] ERROR com.myapp.service.OrderService - org.postgresql.util.PSQLException: Connection timed out after 30000ms
+2026-09-24 00:01:20.890 [http-nio-8080-exec-7] ERROR com.myapp.db.HikariPoolManager - CRITICAL: Connection pool depleted, all 50 connections in use
+2026-09-24 00:01:21.012 [scheduler-1] ERROR com.myapp.scheduler.HealthChecker - Health check FAILED: Database connection timeout
+2026-09-24 00:01:21.123 [scheduler-1] WARN  com.myapp.scheduler.HealthChecker - System health degraded: CPU=78%, Memory=82%, Disk=38%
+2026-09-24 00:01:21.234 [scheduler-1] ERROR com.myapp.scheduler.AlertManager - ALERT TRIGGERED: database_connection_pool_exhausted, severity=CRITICAL
+2026-09-24 00:01:21.345 [scheduler-1] INFO  com.myapp.scheduler.AlertManager - Sending alert to PagerDuty: incident INC-20260924-001
+2026-09-24 00:01:21.456 [scheduler-1] INFO  com.myapp.scheduler.AlertManager - Sending alert to Slack channel #ops-alerts
+2026-09-24 00:01:25.567 [http-nio-8080-exec-8] INFO  com.myapp.filter.RequestLogger - GET /api/health 503 2ms
+2026-09-24 00:01:25.678 [http-nio-8080-exec-8] WARN  com.myapp.controller.HealthController - Health endpoint returned 503: database unavailable
+2026-09-24 00:01:28.789 [http-nio-8080-exec-9] INFO  com.myapp.filter.RequestLogger - GET /api/v1/users/me 500 30005ms userId=user_4102
+2026-09-24 00:01:28.890 [http-nio-8080-exec-9] ERROR com.myapp.service.UserService - Failed to fetch user profile: connection timeout
+2026-09-24 00:01:30.012 [db-reconnect-1] INFO  com.myapp.db.HikariPoolManager - Attempting database reconnection (attempt 1/5)
+2026-09-24 00:01:30.234 [db-reconnect-1] WARN  com.myapp.db.HikariPoolManager - Reconnection attempt 1 failed: Connection refused
+2026-09-24 00:01:35.345 [db-reconnect-1] INFO  com.myapp.db.HikariPoolManager - Attempting database reconnection (attempt 2/5)
+2026-09-24 00:01:35.567 [db-reconnect-1] WARN  com.myapp.db.HikariPoolManager - Reconnection attempt 2 failed: Connection refused
+2026-09-24 00:01:40.678 [db-reconnect-1] INFO  com.myapp.db.HikariPoolManager - Attempting database reconnection (attempt 3/5)
+2026-09-24 00:01:41.012 [db-reconnect-1] INFO  com.myapp.db.HikariPoolManager - Database reconnection successful on attempt 3
+2026-09-24 00:01:41.123 [db-reconnect-1] INFO  com.myapp.db.HikariPoolManager - Connection pool recovered: active=5, idle=45, pending=0
+2026-09-24 00:01:41.234 [scheduler-1] INFO  com.myapp.scheduler.AlertManager - ALERT RESOLVED: database_connection_pool_exhausted
+2026-09-24 00:01:42.345 [http-nio-8080-exec-10] INFO  com.myapp.filter.RequestLogger - GET /api/health 200 5ms
+2026-09-24 00:01:45.456 [http-nio-8080-exec-11] INFO  com.myapp.filter.RequestLogger - POST /api/v1/auth/login 200 39ms userId=user_5200
+2026-09-24 00:01:48.567 [http-nio-8080-exec-12] INFO  com.myapp.filter.RequestLogger - GET /api/v1/orders?status=pending 200 45ms userId=user_5200
+2026-09-24 00:01:50.678 [http-nio-8080-exec-13] INFO  com.myapp.filter.RequestLogger - POST /api/v1/orders 201 167ms userId=user_5200
+2026-09-24 00:01:50.789 [http-nio-8080-exec-13] INFO  com.myapp.service.OrderService - Order created: ORD-20260924-00004, amount=4320.00 TWD
+2026-09-24 00:01:52.890 [http-nio-8080-exec-14] INFO  com.myapp.filter.RequestLogger - POST /api/v1/payments 200 1567ms userId=user_4102
+2026-09-24 00:01:52.901 [http-nio-8080-exec-14] INFO  com.myapp.service.PaymentService - Payment processed: PAY-20260924-00003, gateway=ecpay, status=SUCCESS
+2026-09-24 00:01:55.012 [http-nio-8080-exec-15] INFO  com.myapp.filter.RequestLogger - GET /api/v1/products?search=iphone 200 92ms
+2026-09-24 00:01:55.123 [http-nio-8080-exec-15] DEBUG com.myapp.repository.ProductRepository - Full-text search query: iphone, results=15, elapsed=89ms
+2026-09-24 00:01:58.234 [http-nio-8080-exec-16] INFO  com.myapp.filter.RequestLogger - POST /api/v1/payments 200 890ms userId=user_5200
+2026-09-24 00:01:58.345 [http-nio-8080-exec-16] WARN  com.myapp.service.PaymentService - Payment gateway slow response: PAY-20260924-00004, gateway=jkopay, elapsed=887ms
+2026-09-24 00:01:58.456 [http-nio-8080-exec-16] INFO  com.myapp.service.PaymentService - Payment processed: PAY-20260924-00004, gateway=jkopay, status=SUCCESS
+2026-09-24 00:02:00.567 [scheduler-1] INFO  com.myapp.scheduler.HealthChecker - System health check: CPU=35%, Memory=58%, Disk=38%
+2026-09-24 00:02:00.678 [scheduler-1] INFO  com.myapp.scheduler.HealthChecker - Database pool: active=8, idle=42, pending=0
+2026-09-24 00:02:05.789 [http-nio-8080-exec-17] INFO  com.myapp.filter.RequestLogger - POST /api/v1/auth/register 201 123ms
+2026-09-24 00:02:05.890 [http-nio-8080-exec-17] INFO  com.myapp.service.AuthService - New user registered: user_6001, email=newuser@example.com
+2026-09-24 00:02:06.012 [kafka-producer-1] INFO  com.myapp.mq.KafkaProducer - Message sent to topic [notifications]: key=WELCOME_user_6001, partition=0
+2026-09-24 00:02:08.123 [http-nio-8080-exec-18] INFO  com.myapp.filter.RequestLogger - POST /api/v1/upload/avatar 200 456ms userId=user_6001
+2026-09-24 00:02:08.234 [http-nio-8080-exec-18] INFO  com.myapp.service.FileService - File uploaded: avatar_user_6001.jpg, size=245KB, bucket=myapp-avatars
+2026-09-24 00:02:10.345 [http-nio-8080-exec-19] INFO  com.myapp.filter.RequestLogger - GET /api/v1/orders/ORD-20260924-00002/tracking 200 78ms userId=user_2045
+2026-09-24 00:02:12.456 [http-nio-8080-exec-20] INFO  com.myapp.filter.RequestLogger - PUT /api/v1/orders/ORD-20260924-00001/cancel 200 189ms userId=user_1001
+2026-09-24 00:02:12.567 [http-nio-8080-exec-20] INFO  com.myapp.service.OrderService - Order cancelled: ORD-20260924-00001, reason=user_requested
+2026-09-24 00:02:12.678 [http-nio-8080-exec-20] INFO  com.myapp.service.InventoryService - Stock released for cancelled order ORD-20260924-00001: [SKU-A100 x2, SKU-B200 x1]
+2026-09-24 00:02:12.789 [kafka-producer-1] INFO  com.myapp.mq.KafkaProducer - Message sent to topic [orders]: key=ORD-20260924-00001_CANCELLED, partition=3
+2026-09-24 00:02:15.890 [http-nio-8080-exec-1] INFO  com.myapp.filter.RequestLogger - POST /api/v1/auth/login 200 41ms userId=user_7088
+2026-09-24 00:02:18.012 [http-nio-8080-exec-2] INFO  com.myapp.filter.RequestLogger - POST /api/v1/orders 201 145ms userId=user_7088
+2026-09-24 00:02:18.123 [http-nio-8080-exec-2] INFO  com.myapp.service.OrderService - Order created: ORD-20260924-00005, amount=32100.00 TWD
+2026-09-24 00:02:20.234 [http-nio-8080-exec-3] INFO  com.myapp.filter.RequestLogger - POST /api/v1/payments 200 1890ms userId=user_7088
+2026-09-24 00:02:20.345 [http-nio-8080-exec-3] INFO  com.myapp.service.PaymentService - Payment processed: PAY-20260924-00005, gateway=ecpay, status=PENDING
+2026-09-24 00:02:20.456 [http-nio-8080-exec-3] WARN  com.myapp.service.PaymentService - Payment pending review: PAY-20260924-00005, amount exceeds 30000 TWD threshold
+2026-09-24 00:02:22.567 [kafka-consumer-payments-1] INFO  com.myapp.mq.PaymentEventHandler - Processing payment event: PAY-20260924-00005, status=PENDING
+2026-09-24 00:02:22.678 [kafka-consumer-payments-1] INFO  com.myapp.service.FraudDetection - Running fraud check for payment PAY-20260924-00005
+2026-09-24 00:02:23.789 [kafka-consumer-payments-1] INFO  com.myapp.service.FraudDetection - Fraud check passed: PAY-20260924-00005, risk_score=0.12
+2026-09-24 00:02:25.890 [http-nio-8080-exec-4] INFO  com.myapp.filter.RequestLogger - GET /api/v1/products?category=books&page=2 200 56ms
+2026-09-24 00:02:28.012 [http-nio-8080-exec-5] INFO  com.myapp.filter.RequestLogger - POST /api/v1/reviews 201 34ms userId=user_2045
+2026-09-24 00:02:28.123 [http-nio-8080-exec-5] INFO  com.myapp.service.ReviewService - Review created for product SKU-B200 by user_2045, rating=4
+2026-09-24 00:02:30.234 [scheduler-1] INFO  com.myapp.scheduler.HealthChecker - System health check: CPU=28%, Memory=55%, Disk=39%
+2026-09-24 00:02:32.345 [http-nio-8080-exec-6] INFO  com.myapp.filter.RequestLogger - GET /api/v1/orders?status=shipped 200 67ms userId=user_1001
+2026-09-24 00:02:35.456 [http-nio-8080-exec-7] INFO  com.myapp.filter.RequestLogger - POST /api/v1/auth/logout 200 8ms userId=user_1001
+2026-09-24 00:02:35.567 [http-nio-8080-exec-7] INFO  com.myapp.service.AuthService - User logged out: user_1001, session duration=155s
+2026-09-24 00:02:38.678 [http-nio-8080-exec-8] INFO  com.myapp.filter.RequestLogger - POST /api/v1/auth/login 200 37ms userId=user_8150
+2026-09-24 00:02:40.789 [http-nio-8080-exec-9] INFO  com.myapp.filter.RequestLogger - GET /api/v1/dashboard/stats 200 234ms userId=user_8150
+2026-09-24 00:02:40.890 [http-nio-8080-exec-9] DEBUG com.myapp.service.DashboardService - Dashboard stats computed: orders_today=5, revenue_today=55490.00, active_users=127
+2026-09-24 00:02:42.012 [http-nio-8080-exec-10] INFO  com.myapp.filter.RequestLogger - POST /api/v1/orders/batch-export 200 4567ms userId=user_8150
+2026-09-24 00:02:42.123 [http-nio-8080-exec-10] WARN  com.myapp.service.ExportService - Large export request: 15000 orders, elapsed=4.5s, userId=user_8150
+2026-09-24 00:02:45.234 [http-nio-8080-exec-11] INFO  com.myapp.filter.RequestLogger - POST /api/v1/auth/login 429 5ms
+2026-09-24 00:02:45.345 [http-nio-8080-exec-11] WARN  com.myapp.filter.RateLimiter - Rate limit exceeded for IP 103.22.45.67: 105/100 requests per minute, blocked
+2026-09-24 00:02:45.456 [http-nio-8080-exec-11] ERROR com.myapp.filter.RateLimiter - IP 103.22.45.67 added to temporary blacklist for 5 minutes
+2026-09-24 00:02:48.567 [http-nio-8080-exec-12] INFO  com.myapp.filter.RequestLogger - GET /api/v1/products/SKU-C300 200 15ms
+2026-09-24 00:02:50.678 [http-nio-8080-exec-13] INFO  com.myapp.filter.RequestLogger - POST /api/v1/orders 201 178ms userId=user_2045
+2026-09-24 00:02:50.789 [http-nio-8080-exec-13] INFO  com.myapp.service.OrderService - Order created: ORD-20260924-00006, amount=1250.00 TWD
+2026-09-24 00:02:52.890 [http-nio-8080-exec-14] INFO  com.myapp.filter.RequestLogger - POST /api/v1/auth/refresh-token 200 12ms userId=user_5200
+2026-09-24 00:02:52.901 [http-nio-8080-exec-14] INFO  com.myapp.service.AuthService - Token refreshed for user_5200, new expiry=2026-09-24T01:02:52Z
+2026-09-24 00:02:55.012 [kafka-consumer-notifications-1] INFO  com.myapp.mq.NotificationHandler - Sending push notification to user_6001: Welcome to MyApp!
+2026-09-24 00:02:55.123 [kafka-consumer-notifications-1] INFO  com.myapp.service.NotificationService - Push notification sent via FCM: token=dK9x...mP2q, status=OK
+2026-09-24 00:02:58.234 [http-nio-8080-exec-15] INFO  com.myapp.filter.RequestLogger - POST /api/v1/support/tickets 201 89ms userId=user_3078
+2026-09-24 00:02:58.345 [http-nio-8080-exec-15] INFO  com.myapp.service.SupportService - Support ticket created: TKT-20260924-001, category=order_issue, priority=HIGH
+2026-09-24 00:03:00.456 [scheduler-1] INFO  com.myapp.scheduler.HealthChecker - System health check: CPU=31%, Memory=56%, Disk=39%
+2026-09-24 00:03:02.567 [http-nio-8080-exec-16] INFO  com.myapp.filter.RequestLogger - GET /api/v1/orders/ORD-20260924-00003/invoice 200 345ms userId=user_4102
+2026-09-24 00:03:02.678 [http-nio-8080-exec-16] INFO  com.myapp.service.InvoiceService - Invoice generated: INV-20260924-00003, format=PDF, size=128KB
+2026-09-24 00:03:05.789 [http-nio-8080-exec-17] INFO  com.myapp.filter.RequestLogger - POST /api/v1/orders 201 156ms userId=user_3078
+2026-09-24 00:03:05.890 [http-nio-8080-exec-17] INFO  com.myapp.service.OrderService - Order created: ORD-20260924-00007, amount=6780.00 TWD
+2026-09-24 00:03:08.012 [http-nio-8080-exec-18] INFO  com.myapp.filter.RequestLogger - POST /api/v1/payments 502 15234ms userId=user_3078
+2026-09-24 00:03:08.123 [http-nio-8080-exec-18] ERROR com.myapp.service.PaymentService - Payment gateway error: PAY-20260924-00006, gateway=ecpay, HTTP 502 Bad Gateway
+2026-09-24 00:03:08.234 [http-nio-8080-exec-18] ERROR com.myapp.service.PaymentService - java.net.http.HttpTimeoutException: request timed out after 15000ms
+2026-09-24 00:03:08.345 [http-nio-8080-exec-18] ERROR com.myapp.service.PaymentService -     at java.net.http/jdk.internal.net.http.HttpClientImpl.send(HttpClientImpl.java:565)
+2026-09-24 00:03:08.456 [http-nio-8080-exec-18] ERROR com.myapp.service.PaymentService -     at com.myapp.gateway.ECPayGateway.charge(ECPayGateway.java:112)
+2026-09-24 00:03:08.567 [http-nio-8080-exec-18] ERROR com.myapp.service.PaymentService -     at com.myapp.service.PaymentService.processPayment(PaymentService.java:89)
+2026-09-24 00:03:08.678 [http-nio-8080-exec-18] WARN  com.myapp.service.PaymentService - Payment will be retried automatically in 30 seconds: PAY-20260924-00006
+2026-09-24 00:03:10.789 [http-nio-8080-exec-19] INFO  com.myapp.filter.RequestLogger - GET /api/v1/products?featured=true 200 43ms
+2026-09-24 00:03:12.890 [http-nio-8080-exec-20] INFO  com.myapp.filter.RequestLogger - POST /api/v1/auth/login 200 38ms userId=user_9201
+2026-09-24 00:03:15.012 [http-nio-8080-exec-1] INFO  com.myapp.filter.RequestLogger - GET /api/v1/users/me 200 14ms userId=user_9201
+2026-09-24 00:03:18.123 [http-nio-8080-exec-2] INFO  com.myapp.filter.RequestLogger - POST /api/v1/orders 201 134ms userId=user_9201
+2026-09-24 00:03:18.234 [http-nio-8080-exec-2] INFO  com.myapp.service.OrderService - Order created: ORD-20260924-00008, amount=2990.00 TWD
+2026-09-24 00:03:20.345 [http-nio-8080-exec-3] INFO  com.myapp.filter.RequestLogger - GET /api/v1/orders?page=1&size=50 200 112ms userId=user_8150
+2026-09-24 00:03:22.456 [http-nio-8080-exec-4] INFO  com.myapp.filter.RequestLogger - PUT /api/v1/orders/ORD-20260924-00004/shipping 200 67ms userId=user_5200
+2026-09-24 00:03:22.567 [http-nio-8080-exec-4] INFO  com.myapp.service.ShippingService - Shipping label created: ORD-20260924-00004, carrier=seven_eleven, tracking=TW926824001
+2026-09-24 00:03:25.678 [http-nio-8080-exec-5] INFO  com.myapp.filter.RequestLogger - POST /api/v1/coupons/validate 200 23ms userId=user_9201
+2026-09-24 00:03:25.789 [http-nio-8080-exec-5] INFO  com.myapp.service.CouponService - Coupon validated: SUMMER2026, discount=15%, applicable=true
+2026-09-24 00:03:28.890 [http-nio-8080-exec-6] INFO  com.myapp.filter.RequestLogger - POST /api/v1/payments 200 1123ms userId=user_9201
+2026-09-24 00:03:28.901 [http-nio-8080-exec-6] INFO  com.myapp.service.PaymentService - Payment processed: PAY-20260924-00007, gateway=linepay, status=SUCCESS
+2026-09-24 00:03:30.012 [scheduler-1] INFO  com.myapp.scheduler.HealthChecker - System health check: CPU=33%, Memory=57%, Disk=39%
+2026-09-24 00:03:30.123 [scheduler-1] INFO  com.myapp.scheduler.HealthChecker - Database pool: active=6, idle=44, pending=0
+2026-09-24 00:03:30.234 [scheduler-1] INFO  com.myapp.scheduler.HealthChecker - Kafka consumer lag: orders=0, payments=2, notifications=0
+2026-09-24 00:03:32.345 [http-nio-8080-exec-7] INFO  com.myapp.filter.RequestLogger - POST /api/v1/webhooks/ecpay/callback 200 34ms
+2026-09-24 00:03:32.456 [http-nio-8080-exec-7] INFO  com.myapp.service.WebhookService - ECPay callback received: MerchantTradeNo=PAY-20260924-00006, RtnCode=1 (SUCCESS)
+2026-09-24 00:03:32.567 [http-nio-8080-exec-7] INFO  com.myapp.service.PaymentService - Payment status updated: PAY-20260924-00006, PENDING -> SUCCESS (via webhook)
+2026-09-24 00:03:35.678 [http-nio-8080-exec-8] INFO  com.myapp.filter.RequestLogger - GET /api/v1/notifications?unread=true 200 28ms userId=user_7088
+2026-09-24 00:03:38.789 [http-nio-8080-exec-9] INFO  com.myapp.filter.RequestLogger - DELETE /api/v1/notifications/batch 200 45ms userId=user_7088
+2026-09-24 00:03:40.890 [http-nio-8080-exec-10] INFO  com.myapp.filter.RequestLogger - POST /api/v1/auth/forgot-password 200 567ms
+2026-09-24 00:03:40.901 [http-nio-8080-exec-10] INFO  com.myapp.service.AuthService - Password reset email sent to: u***r@example.com
+2026-09-24 00:03:42.012 [http-nio-8080-exec-11] INFO  com.myapp.filter.RequestLogger - GET /api/v1/admin/system/metrics 200 89ms userId=user_8150
+2026-09-24 00:03:42.123 [http-nio-8080-exec-11] INFO  com.myapp.service.MetricsService - Metrics snapshot: requests_total=247, errors_total=8, p99_latency=2345ms
+2026-09-24 00:03:45.234 [http-nio-8080-exec-12] INFO  com.myapp.filter.RequestLogger - POST /api/v1/orders 201 189ms userId=user_6001
+2026-09-24 00:03:45.345 [http-nio-8080-exec-12] INFO  com.myapp.service.OrderService - Order created: ORD-20260924-00009, amount=1560.00 TWD
+2026-09-24 00:03:48.456 [http-nio-8080-exec-13] INFO  com.myapp.filter.RequestLogger - POST /api/v1/payments 200 978ms userId=user_6001
+2026-09-24 00:03:48.567 [http-nio-8080-exec-13] INFO  com.myapp.service.PaymentService - Payment processed: PAY-20260924-00008, gateway=ecpay, status=SUCCESS
+2026-09-24 00:03:50.678 [http-nio-8080-exec-14] INFO  com.myapp.filter.RequestLogger - GET /api/v1/products/recommendations?userId=user_6001 200 234ms
+2026-09-24 00:03:50.789 [http-nio-8080-exec-14] DEBUG com.myapp.service.RecommendationService - Generated 12 recommendations for user_6001 based on purchase history
+2026-09-24 00:03:52.890 [http-nio-8080-exec-15] INFO  com.myapp.filter.RequestLogger - POST /api/v1/auth/login 200 35ms userId=user_1001
+2026-09-24 00:03:52.901 [http-nio-8080-exec-15] INFO  com.myapp.service.AuthService - User login successful: user_1001 from IP 203.145.67.89 (returning user)
+2026-09-24 00:03:55.012 [http-nio-8080-exec-16] INFO  com.myapp.filter.RequestLogger - GET /api/v1/orders?status=cancelled 200 34ms userId=user_1001
+2026-09-24 00:03:58.123 [http-nio-8080-exec-17] INFO  com.myapp.filter.RequestLogger - POST /api/v1/orders/ORD-20260924-00001/refund 200 2345ms userId=user_1001
+2026-09-24 00:03:58.234 [http-nio-8080-exec-17] INFO  com.myapp.service.RefundService - Refund initiated: REF-20260924-00001, order=ORD-20260924-00001, amount=2580.00 TWD
+2026-09-24 00:03:58.345 [http-nio-8080-exec-17] INFO  com.myapp.service.RefundService - Refund processing via ecpay, estimated completion: 3-5 business days
+2026-09-24 00:04:00.456 [scheduler-1] INFO  com.myapp.scheduler.HealthChecker - System health check: CPU=25%, Memory=53%, Disk=39%
+2026-09-24 00:04:00.567 [scheduler-1] INFO  com.myapp.scheduler.HealthChecker - All systems operational
+2026-09-24 00:04:02.678 [http-nio-8080-exec-18] INFO  com.myapp.filter.RequestLogger - POST /api/v1/orders 201 201ms userId=user_7088
+2026-09-24 00:04:02.789 [http-nio-8080-exec-18] INFO  com.myapp.service.OrderService - Order created: ORD-20260924-00010, amount=8900.00 TWD
+2026-09-24 00:04:05.890 [http-nio-8080-exec-19] INFO  com.myapp.filter.RequestLogger - GET /api/v1/orders/ORD-20260924-00010 200 18ms userId=user_7088
+2026-09-24 00:04:08.012 [http-nio-8080-exec-20] INFO  com.myapp.filter.RequestLogger - POST /api/v1/payments 200 1456ms userId=user_7088
+2026-09-24 00:04:08.123 [http-nio-8080-exec-20] INFO  com.myapp.service.PaymentService - Payment processed: PAY-20260924-00009, gateway=ecpay, status=SUCCESS
+2026-09-24 00:04:10.234 [http-nio-8080-exec-1] INFO  com.myapp.filter.RequestLogger - POST /api/v1/auth/logout 200 7ms userId=user_9201
+2026-09-24 00:04:10.345 [http-nio-8080-exec-1] INFO  com.myapp.service.AuthService - User logged out: user_9201, session duration=348s
+2026-09-24 00:04:12.456 [http-nio-8080-exec-2] INFO  com.myapp.filter.RequestLogger - GET /api/v1/admin/audit-log?from=2026-09-23 200 567ms userId=user_8150
+2026-09-24 00:04:12.567 [http-nio-8080-exec-2] INFO  com.myapp.service.AuditService - Audit log queried: 342 entries returned for date range 2026-09-23 to 2026-09-24
+2026-09-24 00:04:15.678 [http-nio-8080-exec-3] INFO  com.myapp.filter.RequestLogger - POST /api/v1/auth/login 200 33ms userId=user_1234
+2026-09-24 00:04:18.789 [http-nio-8080-exec-4] INFO  com.myapp.filter.RequestLogger - POST /api/v1/orders 422 45ms userId=user_1234
+2026-09-24 00:04:18.890 [http-nio-8080-exec-4] WARN  com.myapp.service.OrderService - Order validation failed for user_1234: insufficient stock for SKU-D400
+2026-09-24 00:04:18.901 [http-nio-8080-exec-4] WARN  com.myapp.service.InventoryService - Stock check failed: SKU-D400, requested=3, available=0
+2026-09-24 00:04:20.012 [http-nio-8080-exec-5] INFO  com.myapp.filter.RequestLogger - GET /api/v1/products/SKU-D400 200 12ms
+2026-09-24 00:04:22.123 [http-nio-8080-exec-6] INFO  com.myapp.filter.RequestLogger - POST /api/v1/wishlist 201 23ms userId=user_1234
+2026-09-24 00:04:22.234 [http-nio-8080-exec-6] INFO  com.myapp.service.WishlistService - Item added to wishlist: user_1234, SKU-D400 (out of stock notification enabled)
+2026-09-24 00:04:25.345 [http-nio-8080-exec-7] INFO  com.myapp.filter.RequestLogger - GET /api/health 200 3ms
+2026-09-24 00:04:28.456 [http-nio-8080-exec-8] INFO  com.myapp.filter.RequestLogger - POST /api/v1/auth/logout 200 9ms userId=user_2045
+2026-09-24 00:04:28.567 [http-nio-8080-exec-8] INFO  com.myapp.service.AuthService - User logged out: user_2045, session duration=268s
+2026-09-24 00:04:30.678 [scheduler-1] INFO  com.myapp.scheduler.HealthChecker - System health check: CPU=22%, Memory=51%, Disk=39%
+2026-09-24 00:04:30.789 [scheduler-1] INFO  com.myapp.scheduler.HealthChecker - Database pool: active=4, idle=46, pending=0
+2026-09-24 00:04:30.890 [scheduler-1] INFO  com.myapp.scheduler.HealthChecker - Redis connection: OK, latency=1ms
+2026-09-24 00:04:30.901 [scheduler-1] INFO  com.myapp.scheduler.HealthChecker - Kafka consumer lag: orders=0, payments=0, notifications=0
+2026-09-24 00:04:30.912 [scheduler-1] INFO  com.myapp.scheduler.HealthChecker - GC stats: young=45, old=2, total_pause=234ms
+2026-09-24 00:04:33.012 [http-nio-8080-exec-9] INFO  com.myapp.filter.RequestLogger - POST /api/v1/auth/logout 200 6ms userId=user_8150
+2026-09-24 00:04:33.123 [http-nio-8080-exec-9] INFO  com.myapp.service.AuthService - User logged out: user_8150, session duration=712s
+2026-09-24 00:04:35.234 [http-nio-8080-exec-10] INFO  com.myapp.filter.RequestLogger - GET /api/v1/orders/ORD-20260924-00005 200 19ms userId=user_7088
+2026-09-24 00:04:38.345 [http-nio-8080-exec-11] INFO  com.myapp.filter.RequestLogger - POST /api/v1/auth/logout 200 8ms userId=user_7088
+2026-09-24 00:04:38.456 [http-nio-8080-exec-11] INFO  com.myapp.service.AuthService - User logged out: user_7088, session duration=496s
+2026-09-24 00:04:40.567 [http-nio-8080-exec-12] INFO  com.myapp.filter.RequestLogger - POST /api/v1/auth/logout 200 7ms userId=user_5200
+2026-09-24 00:04:40.678 [http-nio-8080-exec-12] INFO  com.myapp.service.AuthService - User logged out: user_5200, session duration=530s
+2026-09-24 00:04:42.789 [http-nio-8080-exec-13] INFO  com.myapp.filter.RequestLogger - POST /api/v1/auth/logout 200 6ms userId=user_4102
+2026-09-24 00:04:42.890 [http-nio-8080-exec-13] INFO  com.myapp.service.AuthService - User logged out: user_4102, session duration=760s
+2026-09-24 00:04:45.012 [http-nio-8080-exec-14] INFO  com.myapp.filter.RequestLogger - POST /api/v1/auth/logout 200 8ms userId=user_3078
+2026-09-24 00:04:45.123 [http-nio-8080-exec-14] INFO  com.myapp.service.AuthService - User logged out: user_3078, session duration=887s
+2026-09-24 00:04:48.234 [http-nio-8080-exec-15] INFO  com.myapp.filter.RequestLogger - POST /api/v1/auth/logout 200 5ms userId=user_6001
+2026-09-24 00:04:48.345 [http-nio-8080-exec-15] INFO  com.myapp.service.AuthService - User logged out: user_6001, session duration=402s
+2026-09-24 00:04:50.456 [http-nio-8080-exec-16] INFO  com.myapp.filter.RequestLogger - POST /api/v1/auth/logout 200 7ms userId=user_1234
+2026-09-24 00:04:50.567 [http-nio-8080-exec-16] INFO  com.myapp.service.AuthService - User logged out: user_1234, session duration=215s
+2026-09-24 00:04:55.678 [http-nio-8080-exec-17] INFO  com.myapp.filter.RequestLogger - POST /api/v1/auth/logout 200 6ms userId=user_1001
+2026-09-24 00:04:55.789 [http-nio-8080-exec-17] INFO  com.myapp.service.AuthService - User logged out: user_1001, session duration=183s
+2026-09-24 00:05:00.012 [scheduler-1] INFO  com.myapp.scheduler.HealthChecker - System health check: CPU=12%, Memory=48%, Disk=39%
+2026-09-24 00:05:00.123 [scheduler-1] INFO  com.myapp.scheduler.HealthChecker - No active user sessions
+2026-09-24 00:05:00.234 [scheduler-1] INFO  com.myapp.scheduler.DailyReportJob - Generating daily summary report for 2026-09-24
+2026-09-24 00:05:00.345 [scheduler-1] INFO  com.myapp.scheduler.DailyReportJob - Daily summary: total_orders=10, total_revenue=76070.00 TWD, new_users=1, error_rate=3.2%
+2026-09-24 00:05:00.456 [scheduler-1] INFO  com.myapp.scheduler.DailyReportJob - Report sent to admin@myapp.com
+2026-09-24 00:05:00.567 [main] INFO  com.myapp.Application - Idle mode: waiting for incoming connections

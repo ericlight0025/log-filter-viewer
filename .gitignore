@@ -1,0 +1,14 @@
+# Operating System Files
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# Workspace & Agent internal configs
+AGENTS.md
+GEMINI.md
+.agentignore
+.geminiignore
+
+# Temporary presets or exported files
+*.json
+!example-preset.json

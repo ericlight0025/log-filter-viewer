@@ -1,0 +1,11 @@
+{
+  "keywords": [
+    "ERROR",
+    "timeout"
+  ],
+  "matchMode": "and",
+  "contextLines": "5",
+  "enableTimeFilter": false,
+  "startTime": "",
+  "endTime": ""
+}
