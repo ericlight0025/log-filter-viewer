@@ -368,14 +368,24 @@ if enable_time:
     default_end = (st.session_state.max_time or datetime.datetime.now()) + datetime.timedelta(seconds=1)
 
     with t_col1:
-        s_date = st.date_input("開始日期", value=default_start.date())
-        s_time = st.time_input("開始時間 (含秒)", value=default_start.time(), step=1)
-        start_dt = datetime.datetime.combine(s_date, s_time)
+        c1, c2, c3 = st.columns([4, 4, 2])
+        with c1:
+            s_date = st.date_input("開始日期", value=default_start.date(), key="s_date")
+        with c2:
+            s_time = st.time_input("開始時間 (時:分)", value=default_start.time(), step=60, key="s_time")
+        with c3:
+            s_sec = st.number_input("秒", min_value=0, max_value=59, value=default_start.second, step=1, key="s_sec")
+        start_dt = datetime.datetime.combine(s_date, s_time.replace(second=int(s_sec)))
 
     with t_col2:
-        e_date = st.date_input("結束日期", value=default_end.date())
-        e_time = st.time_input("結束時間 (含秒)", value=default_end.time(), step=1)
-        end_dt = datetime.datetime.combine(e_date, e_time)
+        c4, c5, c6 = st.columns([4, 4, 2])
+        with c4:
+            e_date = st.date_input("結束日期", value=default_end.date(), key="e_date")
+        with c5:
+            e_time = st.time_input("結束時間 (時:分)", value=default_end.time(), step=60, key="e_time")
+        with c6:
+            e_sec = st.number_input("秒", min_value=0, max_value=59, value=default_end.second, step=1, key="e_sec")
+        end_dt = datetime.datetime.combine(e_date, e_time.replace(second=int(e_sec)))
 
 # 匯出條件 Preset 按鈕
 current_kws = [item["val"].strip() for item in st.session_state.keyword_items if item["val"].strip()]
