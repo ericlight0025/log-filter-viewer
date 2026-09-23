@@ -40,19 +40,24 @@
 
 ## 🚀 快速啟動
 
-### 方式一：Streamlit 應用版 (推薦，預設 Port 6666)
+### 方式一：Windows 一鍵啟動 (最推薦)
+
+直接雙擊執行 **`start.bat`**（或 `run.bat`）：
+- 自動檢測 Python 環境與補齊依賴套件。
+- 自動啟動 Streamlit 服務（Port 6666）。
+- 自動開啟 Edge / Chrome 瀏覽器並帶上 `--explicitly-allowed-ports=6666` 參數解除瀏覽器安全阻擋。
+
+### 方式二：手動指令啟動
 
 ```bash
-# 1. 安裝依賴
-pip install -r requirements.txt
+# 直接啟動 (內建自動轉接至 Port 6666)
+py app.py
 
-# 2. 啟動服務 (Port 6666)
+# 或使用 Streamlit 原生指令
 streamlit run app.py --server.port 6666
 ```
 
-開啟瀏覽器造訪：`http://localhost:6666`
-
-### 方式二：純前端單檔版 (免安裝任何環境)
+### 方式三：純前端單檔版 (免安裝任何環境)
 
 直接雙擊開啟 `index.html` 或 `log-filter.html` 即可使用。
 
