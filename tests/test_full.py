@@ -2,6 +2,8 @@ import sys
 import os
 import json
 import datetime
+import re
+from pathlib import Path
 from streamlit.testing.v1 import AppTest
 
 print('==============================================')
@@ -12,7 +14,8 @@ print('==============================================\n')
 # 1. 測試初始載入
 # ----------------------------------------------------------------------
 print('[測試 1/7] 測試應用程式初次啟動...')
-app_path = 'streamlit_app/app.py' if os.path.exists('streamlit_app/app.py') else '../streamlit_app/app.py'
+repo_root = Path(__file__).resolve().parents[1]
+app_path = str(repo_root / 'streamlit_app/app.py')
 at = AppTest.from_file(app_path)
 at.run()
 assert len(at.exception) == 0, f'初次載入異常: {at.exception}'
@@ -47,6 +50,7 @@ at.text_input[1].input('timeout').run()
 # 測試預設 OR 模式
 stat_or = [m.value for m in at.markdown if '搜尋結果：共命中' in str(m.value)][0]
 print(f'  -> OR 模式結果: {stat_or}')
+assert '**23**' in stat_or, f'OR 命中數錯誤: {stat_or}'
 
 # 切換至 AND 模式
 mode_radio = at.radio[0]
@@ -54,6 +58,7 @@ mode_radio.set_value('符合全部 (AND)').run()
 assert len(at.exception) == 0, f'切換 AND 模式異常: {at.exception}'
 stat_and = [m.value for m in at.markdown if '搜尋結果：共命中' in str(m.value)][0]
 print(f'  -> AND 模式結果: {stat_and}')
+assert '**5**' in stat_and, f'AND 命中數錯誤: {stat_and}'
 
 # 測試刪除第二個關鍵字
 del_btn = [b for b in at.button if b.label == '✕'][0]
@@ -80,43 +85,53 @@ at.number_input[1].set_value(30).run()
 assert len(at.exception) == 0, f'微調時間區間異常: {at.exception}'
 stat_time = [m.value for m in at.markdown if '搜尋結果：共命中' in str(m.value)][0]
 print(f'  -> 縮小時間範圍後命中結果: {stat_time}')
+assert '**5**' in stat_time, f'時間過濾命中數錯誤: {stat_time}'
 print('  -> 通過 (精確至秒時間篩選運作正常，無任何 StreamlitAPIException)')
 
 # ----------------------------------------------------------------------
 # 5. 測試前後上下文 (Context) 與區間合併 (Merge Ranges)
 # ----------------------------------------------------------------------
 print('[測試 5/7] 測試前後上下文選擇與區間合併（無重複行號）...')
-context_sel = at.selectbox[0]
+context_sel = at.selectbox(key='context_lines')
 context_sel.set_value(3).run() # ±3 行
 assert len(at.exception) == 0, f'切換 Context 異常: {at.exception}'
 
 # 驗證表格 HTML 正確渲染
 assert any('log-table' in str(m.value) for m in at.markdown), '表格未正常渲染'
+table = next(m.value for m in at.markdown if '<table class="log-table">' in str(m.value))
+line_numbers = re.findall(r'<td class="line-no">(\d+)</td>', table)
+assert line_numbers and len(line_numbers) == len(set(line_numbers)), '上下文含重複行號'
 print('  -> 通過 (±3 行上下文區間合併運算正常，無重疊行號)')
 
 # ----------------------------------------------------------------------
 # 6. 測試純前端 HTML 版本 (index.html / log-filter.html)
 # ----------------------------------------------------------------------
 print('[測試 6/7] 測試純前端單檔版語法與安全高亮邏輯...')
-html_path = 'standalone_html/log-filter.html' if os.path.exists('standalone_html/log-filter.html') else '../standalone_html/log-filter.html'
+html_path = repo_root / 'standalone_html/log-filter.html'
 with open(html_path, 'r', encoding='utf-8') as f:
     html_content = f.read()
 assert 'safeHighlight' in html_content, 'HTML 缺少 safeHighlight 安全高亮'
 assert 'mergeRanges' in html_content, 'HTML 缺少 mergeRanges 合併演算法'
 assert 'exportPreset' in html_content, 'HTML 缺少 exportPreset 條件匯出'
-print('  -> 通過 (純前端單檔 HTML 語法完整且合規)')
+assert html_content == (repo_root / 'standalone_html/index.html').read_text(encoding='utf-8'), '兩個 HTML 版本不同步'
+print('  -> 通過 (HTML 版本一致；JavaScript 行為另由 test_html.cjs 驗證)')
 
 # ----------------------------------------------------------------------
 # 7. 測試啟動腳本 (start.bat / run.bat)
 # ----------------------------------------------------------------------
 print('[測試 7/7] 測試 Windows start.bat / run.bat 編碼與語法...')
-bat_path = 'start.bat' if os.path.exists('start.bat') else '../start.bat'
-with open(bat_path, 'r', encoding='utf-8', errors='ignore') as f:
+bat_path = repo_root / 'start.bat'
+with open(bat_path, 'r', encoding='utf-8') as f:
     bat_content = f.read()
-assert 'streamlit run' in bat_content, 'start.bat 缺少啟動指令'
-assert '--explicitly-allowed-ports=6666' in bat_content, 'start.bat 缺少瀏覽器解鎖參數'
-print('  -> 通過 (批次檔無非法字元，已含自動解除瀏覽器 6666 限制)')
+assert 'launch.py' in bat_content and '%*' in bat_content, 'start.bat 未轉交 Python 啟動器或參數'
+launcher = (repo_root / 'launch.py').read_text(encoding='utf-8')
+assert '--explicitly-allowed-ports=6666' in launcher, 'Python 啟動器缺少瀏覽器解鎖參數'
+for name in ['start.bat', 'run.bat']:
+    raw = (repo_root / name).read_bytes()
+    assert not raw.startswith(b'\xef\xbb\xbf'), f'{name} 含 BOM'
+    assert b'\n' not in raw.replace(b'\r\n', b''), f'{name} 不是統一 CRLF'
+print('  -> 通過 (批次檔編碼、換行與 Python 轉交檢查)')
 
 print('\n==============================================')
-print('  🎉 全部 7 大模組全數通過測試，100% 穩定就緒！')
+print('  全部 7 項基礎檢查通過；請另執行回歸測試與 HTML 行為測試。')
 print('==============================================')

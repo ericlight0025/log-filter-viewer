@@ -6,6 +6,13 @@ import html
 import json
 import datetime
 import uuid
+import hashlib
+
+# AppTest 與直接啟動都使用同一份設定檔驗證規則。
+APP_DIR = os.path.dirname(os.path.abspath(__file__))
+if APP_DIR not in sys.path:
+    sys.path.insert(0, APP_DIR)
+from preset_utils import CONTEXT_OPTIONS, MODE_LABELS, normalize_preset
 
 # 支援直接使用 `python app.py` 或 `py app.py` 啟動，自動轉接至 Streamlit 服務
 if __name__ == "__main__":
@@ -160,6 +167,58 @@ def safe_highlight(raw_text: str, keywords: list):
     return "".join(out)
 
 
+def set_time_range(start, end):
+    """保存隱藏的時間條件，並在建立元件前同步元件狀態。"""
+    start = start.replace(microsecond=0)
+    end = end.replace(microsecond=0)
+    st.session_state.time_range = (start, end)
+    for prefix, value in [("s", start), ("e", end)]:
+        st.session_state[f"{prefix}_date"] = value.date()
+        st.session_state[f"{prefix}_time"] = value.time().replace(second=0)
+        st.session_state[f"{prefix}_sec"] = value.second
+
+
+def load_log_content(content, name):
+    """集中更新日誌資料與時間索引，保留沒有時間戳記的堆疊行。"""
+    lines = content.splitlines()
+    line_times = []
+    last_time = None
+    for line in lines:
+        timestamp = parse_time(line)
+        if timestamp is not None:
+            last_time = timestamp
+        line_times.append(last_time)
+    valid_times = [t for t in line_times if t is not None]
+    st.session_state.update(
+        file_name=name, log_lines=lines, line_times=line_times,
+        min_time=min(valid_times) if valid_times else None,
+        max_time=max(valid_times) if valid_times else None,
+    )
+    if not st.session_state.get("preset_time_range", False):
+        now = datetime.datetime.now().replace(microsecond=0)
+        set_time_range(st.session_state.min_time or now,
+                       (st.session_state.max_time or now) + datetime.timedelta(seconds=1))
+
+
+def restore_time_inputs():
+    """重新顯示元件時明確還原保存值，避免 Streamlit 沿用舊的初始化值。"""
+    if st.session_state.enable_time:
+        set_time_range(*st.session_state.time_range)
+
+
+def reset_uploader():
+    """以新 key 重建上傳元件，避免舊檔案在下一輪被重新讀回。"""
+    st.session_state.log_upload_generation += 1
+    st.session_state.loaded_upload = None
+    st.session_state.log_error = ""
+
+
+def clear_log():
+    reset_uploader()
+    st.session_state.update(log_lines=[], line_times=[], file_name="", min_time=None, max_time=None)
+    st.session_state.log_notice = ""
+
+
 def load_demo_log():
     sample_candidates = [
         os.path.join(os.path.dirname(__file__), "..", "samples", "sample-server.log"),
@@ -171,28 +230,38 @@ def load_demo_log():
     sample_path = next((p for p in sample_candidates if os.path.exists(p)), None)
     if sample_path:
         try:
-            with open(sample_path, "r", encoding="utf-8", errors="ignore") as f:
+            with open(sample_path, "r", encoding="utf-8-sig") as f:
                 content = f.read()
-            st.session_state.file_name = "sample-server.log"
-            lines = content.splitlines()
-            st.session_state.log_lines = lines
-            
-            line_times = []
-            last_time = None
-            for l in lines:
-                t = parse_time(l)
-                if t:
-                    last_time = t
-                line_times.append(last_time)
-            
-            st.session_state.line_times = line_times
-            valid_ts = [t for t in line_times if t is not None]
-            st.session_state.min_time = min(valid_ts) if valid_ts else None
-            st.session_state.max_time = max(valid_ts) if valid_ts else None
+            load_log_content(content, "sample-server.log")
             return True
         except Exception:
             return False
     return False
+
+
+def select_demo_log():
+    if load_demo_log():
+        reset_uploader()
+        st.session_state.log_notice = "已載入範例 sample-server.log！"
+    else:
+        st.session_state.log_error = "無法讀取 samples/sample-server.log 檔案"
+
+
+def apply_preset(preset):
+    """此函式只在新設定檔匯入時執行，不覆蓋後續的手動調整。"""
+    st.session_state.keyword_items = [
+        {"id": str(uuid.uuid4()), "val": kw} for kw in (preset["keywords"] or [""])
+    ]
+    st.session_state.match_mode = MODE_LABELS[preset["matchMode"]]
+    st.session_state.context_lines = preset["contextLines"]
+    st.session_state.enable_time = preset["enableTimeFilter"]
+    start, end = st.session_state.time_range
+    if preset["startTime"]:
+        start = datetime.datetime.fromisoformat(preset["startTime"])
+    if preset["endTime"]:
+        end = datetime.datetime.fromisoformat(preset["endTime"])
+    st.session_state.preset_time_range = bool(preset["startTime"] or preset["endTime"])
+    set_time_range(start, end)
 
 # 初始化 Session State
 if "keyword_items" not in st.session_state:
@@ -205,9 +274,21 @@ if "log_lines" not in st.session_state:
     st.session_state.min_time = None
     st.session_state.max_time = None
 
+for state_key, default in {
+    "log_upload_generation": 0, "loaded_upload": None, "log_error": "", "log_notice": "",
+    "imported_preset": None, "preset_error": "", "preset_time_range": False,
+    "match_mode": MODE_LABELS["or"], "context_lines": 5, "enable_time": False,
+}.items():
+    if state_key not in st.session_state:
+        st.session_state[state_key] = default
+if "time_range" not in st.session_state:
+    initial_time = datetime.datetime.now().replace(microsecond=0)
+    set_time_range(initial_time, initial_time + datetime.timedelta(seconds=1))
+
 # 若 URL 帶有 ?demo=1 且尚未載入日誌，自動載入範例檔 (方便預覽與截圖)
-if st.query_params.get("demo") == "1" and not st.session_state.log_lines:
+if st.query_params.get("demo") == "1" and not st.session_state.get("demo_initialized", False):
     load_demo_log()
+    st.session_state.demo_initialized = True
 
 # ==============================================================================
 # 側邊欄：檔案載入與預設條件管理
@@ -227,46 +308,42 @@ with st.sidebar:
 
     st.divider()
 
-    uploaded_file = st.file_uploader("上傳 Log 檔案", type=None, help="支援 .log, .txt 或任何伺服器日誌檔")
+    log_encoding = st.selectbox("日誌文字編碼", ["UTF-8", "Big5", "GB18030", "UTF-16"], key="log_encoding")
+    uploaded_file = st.file_uploader(
+        "上傳 Log 檔案", type=None, key=f"log_file_{st.session_state.log_upload_generation}",
+        help="支援 .log, .txt 或任何伺服器日誌檔；解碼失敗時請選擇正確的文字編碼"
+    )
     
     # 快捷載入預設範例檔
     col_demo, col_clear = st.columns(2)
     with col_demo:
-        if st.button("📄 載入範例 Log", use_container_width=True):
-            if load_demo_log():
-                st.success("已載入範例 sample-server.log！")
-            else:
-                st.error("找不到 samples/sample-server.log 檔案！")
+        st.button("📄 載入範例 Log", use_container_width=True, on_click=select_demo_log)
 
     with col_clear:
-        if st.button("🗑️ 清空資料", use_container_width=True):
-            st.session_state.log_lines = []
-            st.session_state.line_times = []
-            st.session_state.file_name = ""
-            st.session_state.min_time = None
-            st.session_state.max_time = None
-            st.rerun()
+        st.button("🗑️ 清空資料", use_container_width=True, on_click=clear_log)
 
     # 如果有上傳檔案
-    if uploaded_file is not None and uploaded_file.name != st.session_state.file_name:
-        content = uploaded_file.getvalue().decode("utf-8", errors="ignore")
-        lines = content.splitlines()
-        st.session_state.file_name = uploaded_file.name
-        st.session_state.log_lines = lines
+    if uploaded_file is not None:
+        raw_bytes = uploaded_file.getvalue()
+        upload_id = (uploaded_file.name, getattr(uploaded_file, "file_id", None),
+                     hashlib.sha256(raw_bytes).hexdigest(), log_encoding)
+        if upload_id != st.session_state.loaded_upload:
+            try:
+                codec = {"UTF-8": "utf-8-sig", "Big5": "big5", "GB18030": "gb18030", "UTF-16": "utf-16"}[log_encoding]
+                content = raw_bytes.decode(codec)
+                load_log_content(content, uploaded_file.name)
+                st.session_state.loaded_upload = upload_id
+                st.session_state.log_error = ""
+                st.session_state.log_notice = ""
+            except UnicodeError:
+                st.session_state.log_error = f"無法以 {log_encoding} 解碼「{uploaded_file.name}」，請選擇正確編碼。尚未載入此檔案。"
+    else:
+        st.session_state.loaded_upload = None
 
-        line_times = []
-        last_time = None
-        for l in lines:
-            t = parse_time(l)
-            if t:
-                last_time = t
-            line_times.append(last_time)
-
-        st.session_state.line_times = line_times
-        valid_ts = [t for t in line_times if t is not None]
-        st.session_state.min_time = min(valid_ts) if valid_ts else None
-        st.session_state.max_time = max(valid_ts) if valid_ts else None
-        st.rerun()
+    if st.session_state.log_notice:
+        st.success(st.session_state.log_notice)
+    if st.session_state.log_error:
+        st.error(st.session_state.log_error)
 
     st.divider()
 
@@ -274,17 +351,22 @@ with st.sidebar:
     st.subheader("💾 條件設定檔 (Preset)")
     preset_file = st.file_uploader("匯入設定 (JSON)", type=["json"], key="preset_file_uploader")
     if preset_file is not None:
-        try:
-            preset_data = json.loads(preset_file.getvalue().decode("utf-8"))
-            if "keywords" in preset_data and isinstance(preset_data["keywords"], list):
-                st.session_state.keyword_items = [
-                    {"id": str(uuid.uuid4()), "val": kw} for kw in preset_data["keywords"]
-                ]
-                if not st.session_state.keyword_items:
-                    st.session_state.keyword_items = [{"id": str(uuid.uuid4()), "val": ""}]
+        preset_bytes = preset_file.getvalue()
+        preset_id = (getattr(preset_file, "file_id", None), hashlib.sha256(preset_bytes).hexdigest())
+        if preset_id != st.session_state.imported_preset:
+            st.session_state.imported_preset = preset_id
+            try:
+                preset = normalize_preset(json.loads(preset_bytes.decode("utf-8-sig")))
+                apply_preset(preset)
+                st.session_state.preset_error = ""
                 st.success("已成功匯入查詢條件！")
-        except Exception as e:
-            st.error(f"解析設定檔失敗: {e}")
+            except (ValueError, UnicodeError) as e:
+                st.session_state.preset_error = f"解析設定檔失敗: {e}"
+        if st.session_state.preset_error:
+            st.error(st.session_state.preset_error)
+    else:
+        st.session_state.imported_preset = None
+        st.session_state.preset_error = ""
 
 # 動態產生主題 CSS
 theme_palette_rules = "\n".join([f".kw-color-{i}, .highlight-{i} {{ background: {theme['palette'][i]} !important; color: #fff !important; }}" for i in range(6)])
@@ -436,6 +518,7 @@ with col_mode:
         "比對條件",
         options=["符合任一 (OR)", "符合全部 (AND)"],
         horizontal=True,
+        key="match_mode",
         label_visibility="collapsed"
     )
 
@@ -445,13 +528,14 @@ with col_mode:
 col_time_toggle, col_context = st.columns([6, 4])
 
 with col_time_toggle:
-    enable_time = st.checkbox("🕒 啟用時間區間過濾 (精確至秒)", value=False)
+    enable_time = st.checkbox("🕒 啟用時間區間過濾 (精確至秒)", key="enable_time", on_change=restore_time_inputs)
 
 with col_context:
     context_lines = st.selectbox(
         "前後上下文行數",
-        options=[0, 3, 5, 10, 20, 50],
+        options=CONTEXT_OPTIONS,
         index=2,
+        key="context_lines",
         format_func=lambda x: f"±{x} 行" if x > 0 else "0 行 (僅命中行)"
     )
 
@@ -459,46 +543,66 @@ with col_context:
 start_dt, end_dt = None, None
 if enable_time:
     t_col1, t_col2 = st.columns(2)
-    default_start = st.session_state.min_time or datetime.datetime.now()
-    default_end = (st.session_state.max_time or datetime.datetime.now()) + datetime.timedelta(seconds=1)
+    # 元件被隱藏時 Streamlit 會清理其 key，從保存的時間範圍恢復。
+    if "s_date" not in st.session_state or "e_date" not in st.session_state:
+        set_time_range(*st.session_state.time_range)
 
     with t_col1:
         c1, c2, c3 = st.columns([4, 4, 2])
         with c1:
-            s_date = st.date_input("開始日期", value=default_start.date(), key="s_date")
+            s_date = st.date_input("開始日期", value=None, key="s_date")
         with c2:
-            s_time = st.time_input("開始時間 (時:分)", value=default_start.time(), step=60, key="s_time")
+            s_time = st.time_input("開始時間 (時:分)", value=None, step=60, key="s_time")
         with c3:
-            s_sec = st.number_input("秒", min_value=0, max_value=59, value=default_start.second, step=1, key="s_sec")
-        start_dt = datetime.datetime.combine(s_date, s_time.replace(second=int(s_sec)))
+            s_sec = st.number_input("秒", min_value=0, max_value=59, value=None, step=1, key="s_sec")
+        if s_date is not None and s_time is not None and s_sec is not None:
+            start_dt = datetime.datetime.combine(s_date, s_time.replace(second=int(s_sec)))
 
     with t_col2:
         c4, c5, c6 = st.columns([4, 4, 2])
         with c4:
-            e_date = st.date_input("結束日期", value=default_end.date(), key="e_date")
+            e_date = st.date_input("結束日期", value=None, key="e_date")
         with c5:
-            e_time = st.time_input("結束時間 (時:分)", value=default_end.time(), step=60, key="e_time")
+            e_time = st.time_input("結束時間 (時:分)", value=None, step=60, key="e_time")
         with c6:
-            e_sec = st.number_input("秒", min_value=0, max_value=59, value=default_end.second, step=1, key="e_sec")
-        end_dt = datetime.datetime.combine(e_date, e_time.replace(second=int(e_sec)))
+            e_sec = st.number_input("秒", min_value=0, max_value=59, value=None, step=1, key="e_sec")
+        if e_date is not None and e_time is not None and e_sec is not None:
+            end_dt = datetime.datetime.combine(e_date, e_time.replace(second=int(e_sec)))
+    if start_dt is not None and end_dt is not None:
+        st.session_state.time_range = (start_dt, end_dt)
 
 # 匯出條件 Preset 按鈕
 current_kws = [item["val"].strip() for item in st.session_state.keyword_items if item["val"].strip()]
 preset_payload = {
+    "schemaVersion": 1,
     "keywords": current_kws,
-    "match_mode": match_mode,
-    "context_lines": context_lines,
-    "enable_time": enable_time
+    "matchMode": next(key for key, label in MODE_LABELS.items() if label == match_mode),
+    "contextLines": context_lines,
+    "enableTimeFilter": enable_time,
+    "startTime": st.session_state.time_range[0].isoformat(timespec="seconds"),
+    "endTime": st.session_state.time_range[1].isoformat(timespec="seconds"),
 }
 st.sidebar.download_button(
     "💾 下載目前條件設定檔 (JSON)",
     data=json.dumps(preset_payload, ensure_ascii=False, indent=2),
     file_name=f"log_preset_{datetime.datetime.now().strftime('%Y%m%d_%H%M%S')}.json",
     mime="application/json",
+    disabled=(st.session_state.time_range[0] > st.session_state.time_range[1]
+              or (enable_time and (start_dt is None or end_dt is None))),
     use_container_width=True
 )
 
 st.divider()
+
+if st.session_state.log_error:
+    st.warning("請先修正新檔案的文字編碼，避免誤用先前檔案的搜尋結果。")
+    st.stop()
+if enable_time and (start_dt is None or end_dt is None):
+    st.error("請填寫完整的開始與結束日期時間。")
+    st.stop()
+if enable_time and start_dt > end_dt:
+    st.error("開始時間不可晚於結束時間。")
+    st.stop()
 
 # ==============================================================================
 # 搜尋與區間合併邏輯

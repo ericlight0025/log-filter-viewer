@@ -613,6 +613,7 @@ let fileStartTime = null;
 let fileEndTime = null;
 let fileName = '';
 let currentMergedRanges = [];
+let presetTimeRange = false;
 
 // =====================
 // 1. 穩健檔案選取與拖曳
@@ -678,8 +679,8 @@ function loadFile(file) {
       const t = extractTime(logLines[i]);
       if (t > 0) {
         lastTime = t;
-        if (fileStartTime === null) fileStartTime = t;
-        fileEndTime = t;
+        fileStartTime = fileStartTime === null ? t : Math.min(fileStartTime, t);
+        fileEndTime = fileEndTime === null ? t : Math.max(fileEndTime, t);
       }
       lineTimestamps[i] = lastTime;
     }
@@ -688,12 +689,18 @@ function loadFile(file) {
     fileInfo.innerHTML = `檔案：<strong>${escapeHtml(fileName)}</strong> &nbsp;|&nbsp; 共 ${logLines.length.toLocaleString()} 行`;
 
     if (fileStartTime && fileEndTime) {
-      startTimeInput.value = formatDatetimeLocal(fileStartTime);
-      // 結束時間自動加 1 秒確保完整包含最後一秒的毫秒
-      endTimeInput.value = formatDatetimeLocal(fileEndTime + 1000);
+      if (!presetTimeRange) {
+        startTimeInput.value = formatDatetimeLocal(fileStartTime);
+        // 結束時間自動加 1 秒確保完整包含最後一秒的毫秒
+        endTimeInput.value = formatDatetimeLocal(fileEndTime + 1000);
+      }
       fileTimeSpan.style.display = 'inline-block';
       fileTimeSpan.textContent = `範圍: ${formatDisplayTime(fileStartTime)} ~ ${formatDisplayTime(fileEndTime)}`;
     } else {
+      if (!presetTimeRange) {
+        startTimeInput.value = '';
+        endTimeInput.value = '';
+      }
       fileTimeSpan.style.display = 'none';
       fileTimeSpan.textContent = '';
     }
@@ -778,6 +785,7 @@ enableTimeFilter.addEventListener('change', function() {
 
 resetTimeBtn.addEventListener('click', () => {
   if (fileStartTime && fileEndTime) {
+    presetTimeRange = false;
     startTimeInput.value = formatDatetimeLocal(fileStartTime);
     endTimeInput.value = formatDatetimeLocal(fileEndTime + 1000);
     searchLog();
@@ -880,6 +888,19 @@ function searchLog() {
   const matchMode = matchModeSel.value;
   const contextSize = parseInt(contextSel.value, 10);
 
+  if (isTimeFilterOn && ((stStr && !Number.isFinite(Date.parse(stStr))) ||
+      (etStr && !Number.isFinite(Date.parse(etStr))) ||
+      (stStr && etStr && Date.parse(stStr) > Date.parse(etStr)))) {
+    currentMergedRanges = [];
+    logContainer.innerHTML = '';
+    placeholder.style.display = '';
+    placeholder.textContent = '請檢查日期時間；開始時間不可晚於結束時間。';
+    logContainer.appendChild(placeholder);
+    matchCount.innerHTML = '';
+    copyBtn.disabled = true;
+    return;
+  }
+
   const matches = findMatches(keywords, matchMode, isTimeFilterOn, stStr, etStr);
   matchCount.innerHTML = `符合: <strong>${matches.length.toLocaleString()}</strong> 行`;
 
@@ -910,6 +931,17 @@ function searchLog() {
   ]);
 
   currentMergedRanges = mergeRanges(ranges);
+  // 保護實際將渲染的行數，包含上下文且不重複計算重疊區間。
+  const displayRows = currentMergedRanges.reduce((count, [start, end]) => count + end - start + 1, 0);
+  if (displayRows > 50000) {
+    currentMergedRanges = [];
+    logContainer.innerHTML = '';
+    placeholder.style.display = '';
+    placeholder.innerHTML = `<span class="emoji">⚠️</span><span>含上下文的展示行數過多 (${displayRows.toLocaleString()} 行)。<br><br>請縮小上下文、增加關鍵字或縮小時間範圍。</span>`;
+    logContainer.appendChild(placeholder);
+    copyBtn.disabled = true;
+    return;
+  }
   renderResults(currentMergedRanges, new Set(matches), keywords);
   copyBtn.disabled = false;
 }
@@ -1051,15 +1083,26 @@ function copyToClipboard() {
 // =====================
 // 8. 條件匯出與匯入
 // =====================
-function exportPreset() {
-  const preset = {
+function getPreset() {
+  return {
+    schemaVersion: 1,
     keywords: getKeywords(),
     matchMode: matchModeSel.value,
-    contextLines: contextSel.value,
+    contextLines: Number(contextSel.value),
     enableTimeFilter: enableTimeFilter.checked,
     startTime: startTimeInput.value,
     endTime: endTimeInput.value
   };
+}
+
+function exportPreset() {
+  let preset;
+  try {
+    preset = normalizePreset(getPreset());
+  } catch (error) {
+    alert(`無法匯出設定檔：${error.message}`);
+    return;
+  }
 
   const blob = new Blob([JSON.stringify(preset, null, 2)], { type: 'application/json' });
   const url = URL.createObjectURL(blob);
@@ -1070,6 +1113,53 @@ function exportPreset() {
   a.href = url;
   a.click();
   URL.revokeObjectURL(url);
+}
+
+function normalizePreset(data) {
+  // 與 Streamlit 使用相同格式，並相容兩個介面的舊設定檔。
+  if (!data || typeof data !== 'object' || Array.isArray(data)) throw new Error('設定檔必須是 JSON 物件');
+  if (data.schemaVersion !== undefined && data.schemaVersion !== 1) throw new Error('不支援此設定檔版本');
+  const field = (name, legacy, fallback) => Object.prototype.hasOwnProperty.call(data, name) ? data[name]
+    : Object.prototype.hasOwnProperty.call(data, legacy) ? data[legacy] : fallback;
+  const keywords = field('keywords', 'keywords', []);
+  if (!Array.isArray(keywords) || keywords.some(kw => typeof kw !== 'string')) throw new Error('keywords 必須是字串陣列');
+  const rawMode = field('matchMode', 'match_mode', 'or');
+  const matchMode = ({'符合任一 (OR)': 'or', '符合全部 (AND)': 'and'})[rawMode] || rawMode;
+  if (!['or', 'and'].includes(matchMode)) throw new Error('比對條件必須是 or 或 and');
+  let contextLines = field('contextLines', 'context_lines', 5);
+  if (typeof contextLines === 'string' && /^\d+$/.test(contextLines)) contextLines = Number(contextLines);
+  if (!Number.isInteger(contextLines) || ![0, 3, 5, 10, 20, 50].includes(contextLines)) throw new Error('上下文行數必須是 0、3、5、10、20 或 50');
+  const enableTimeFilter = field('enableTimeFilter', 'enable_time', false);
+  if (typeof enableTimeFilter !== 'boolean') throw new Error('時間過濾開關必須是布林值');
+  const normalizeTime = value => {
+    if (typeof value !== 'string') throw new Error('時間必須是日期時間字串');
+    if (!value) return '';
+    if (!/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}(:\d{2})?$/.test(value)) throw new Error('時間格式必須為 YYYY-MM-DDTHH:MM:SS');
+    const normalized = value.length === 16 ? `${value}:00` : value;
+    const ms = Date.parse(normalized);
+    if (normalized.startsWith('0000-') || !Number.isFinite(ms) || formatDatetimeLocal(ms) !== normalized) throw new Error('設定檔包含無效的日期時間');
+    return normalized;
+  };
+  const startTime = normalizeTime(field('startTime', 'start_time', ''));
+  const endTime = normalizeTime(field('endTime', 'end_time', ''));
+  if (startTime && endTime && startTime > endTime) throw new Error('開始時間不可晚於結束時間');
+  return {schemaVersion: 1, keywords: keywords.map(kw => kw.trim()).filter(Boolean), matchMode, contextLines, enableTimeFilter, startTime, endTime};
+}
+
+function applyPreset(data) {
+  // 先完整驗證，再一次更新，無效設定不會破壞目前條件。
+  const preset = normalizePreset(data);
+  presetTimeRange = !!(preset.startTime || preset.endTime);
+  matchModeSel.value = preset.matchMode;
+  contextSel.value = String(preset.contextLines);
+  enableTimeFilter.checked = preset.enableTimeFilter;
+  startTimeInput.disabled = !preset.enableTimeFilter;
+  endTimeInput.disabled = !preset.enableTimeFilter;
+  resetTimeBtn.disabled = !preset.enableTimeFilter;
+  startTimeInput.value = preset.startTime;
+  endTimeInput.value = preset.endTime;
+  keywordsContainer.innerHTML = '';
+  (preset.keywords.length ? preset.keywords : ['']).forEach(kw => addKeywordRow(kw, false));
 }
 
 importPresetBtn.addEventListener('click', () => {
@@ -1084,29 +1174,11 @@ importPresetInput.addEventListener('change', function (e) {
   const reader = new FileReader();
   reader.onload = function (evt) {
     try {
-      const preset = JSON.parse(evt.target.result);
-
-      if (preset.matchMode) matchModeSel.value = preset.matchMode;
-      if (preset.contextLines) contextSel.value = preset.contextLines;
-      
-      if (preset.enableTimeFilter !== undefined) {
-        enableTimeFilter.checked = !!preset.enableTimeFilter;
-        startTimeInput.disabled = !enableTimeFilter.checked;
-        endTimeInput.disabled = !enableTimeFilter.checked;
-        resetTimeBtn.disabled = !enableTimeFilter.checked;
-      }
-      if (preset.startTime) startTimeInput.value = preset.startTime;
-      if (preset.endTime) endTimeInput.value = preset.endTime;
-
-      if (Array.isArray(preset.keywords)) {
-        keywordsContainer.innerHTML = '';
-        preset.keywords.forEach(kw => addKeywordRow(kw, false));
-        if (preset.keywords.length === 0) addKeywordRow('', false);
-      }
+      applyPreset(JSON.parse(evt.target.result.replace(/^\uFEFF/, '')));
 
       if (logLines.length > 0) searchLog();
-    } catch (_) {
-      alert('無效的條件設定檔 (JSON 解析失敗)');
+    } catch (error) {
+      alert(`無效的條件設定檔：${error.message}`);
     }
   };
   reader.readAsText(file);
@@ -1118,6 +1190,7 @@ exportPresetBtn.addEventListener('click', exportPreset);
 // 9. 事件綁定與清理
 // =====================
 function clearSearch() {
+  presetTimeRange = false;
   keywordsContainer.innerHTML = '';
   addKeywordRow('', true);
   enableTimeFilter.checked = false;
