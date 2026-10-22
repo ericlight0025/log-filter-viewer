@@ -3,7 +3,6 @@ import os
 import streamlit as st
 import json
 import datetime
-import re
 import uuid
 import hashlib
 
@@ -12,8 +11,8 @@ APP_DIR = os.path.dirname(os.path.abspath(__file__))
 if APP_DIR not in sys.path:
     sys.path.insert(0, APP_DIR)
 from preset_utils import CONTEXT_OPTIONS, MODE_LABELS, normalize_preset
-from log_search import (MAX_DISPLAY_ROWS, build_highlighter, compile_terms, context_ranges,
-                        count_rows, export_text, find_matches, index_times, render_table)
+from log_search import (MAX_DISPLAY_ROWS, RegexError, SearchTimeout, build_highlighter, compile_terms,
+                        context_ranges, count_rows, export_text, find_matches, index_times, render_table)
 
 # 支援直接使用 `python app.py` 或 `py app.py` 啟動，自動轉接至 Streamlit 服務
 if __name__ == "__main__":
@@ -590,7 +589,7 @@ exclude_terms = (exclude_keyword,) if exclude_keyword else ()
 if use_regex:
     try:
         compile_terms(current_kws + list(exclude_terms), use_regex=True)
-    except re.error as exc:
+    except RegexError as exc:
         st.error(f"正規表達式語法錯誤：{exc}")
         st.stop()
 
@@ -598,8 +597,12 @@ log_lines = st.session_state.log_lines
 time_bounds = (start_dt, end_dt) if enable_time else (None, None)
 is_and = ("AND" in match_mode)
 # 搜尋與渲染依日誌內容雜湊與條件快取，切換主題等無關操作不會重新掃描整個檔案。
-matches = search_log(st.session_state.log_key, log_lines, st.session_state.line_times,
-                     tuple(current_kws), is_and, *time_bounds, exclude_terms, use_regex, case_sensitive)
+try:
+    matches = search_log(st.session_state.log_key, log_lines, st.session_state.line_times,
+                         tuple(current_kws), is_and, *time_bounds, exclude_terms, use_regex, case_sensitive)
+except SearchTimeout as exc:
+    st.error(f"⏱️ {exc}")
+    st.stop()
 
 # 顯示統計
 col_stat, col_copy = st.columns([7, 3])
@@ -630,5 +633,10 @@ if display_rows > MAX_DISPLAY_ROWS:
 
 highlight_terms = tuple((item["val"].strip(), idx % 6)
                         for idx, item in enumerate(st.session_state.keyword_items) if item["val"].strip())
-st.markdown(render_log_table(st.session_state.log_key, log_lines, tuple(map(tuple, merged_ranges)),
-                             tuple(matches), highlight_terms, use_regex, case_sensitive), unsafe_allow_html=True)
+try:
+    table_html = render_log_table(st.session_state.log_key, log_lines, tuple(map(tuple, merged_ranges)),
+                                  tuple(matches), highlight_terms, use_regex, case_sensitive)
+except SearchTimeout as exc:
+    st.error(f"⏱️ {exc}")
+    st.stop()
+st.markdown(table_html, unsafe_allow_html=True)

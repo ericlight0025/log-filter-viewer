@@ -4,6 +4,8 @@ import datetime
 from pathlib import Path
 import sys
 
+import pytest
+
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "streamlit_app"))
 from log_search import (build_highlighter, context_ranges, count_rows, export_text,
                         find_matches, index_times, merge_ranges, render_table)
@@ -88,3 +90,29 @@ def test_regex_highlight_uses_group_color():
 def test_case_sensitive_highlight():
     out = build_highlighter([("ERROR", 0)], case_sensitive=True)("error ERROR")
     assert out == 'error <span class="highlight highlight-0">ERROR</span>'
+
+
+def test_catastrophic_regex_times_out(monkeypatch):
+    import log_search
+    monkeypatch.setattr(log_search, "REGEX_LINE_TIMEOUT", 0.2)
+    evil = r"(a+)+$"
+    line = "a" * 5000 + "!"
+    with pytest.raises(log_search.SearchTimeout) as info:
+        find_matches([line], [None], [evil], False, use_regex=True)
+    assert "逾時" in str(info.value)
+    with pytest.raises(log_search.SearchTimeout):
+        build_highlighter([(evil, 0)], use_regex=True)(line)
+    # 總時間預算：每行都略慢但不超過單行逾時，也必須在預算內停止
+    monkeypatch.setattr(log_search, "SEARCH_TIME_LIMIT", 0.3)
+    monkeypatch.setattr(log_search, "REGEX_LINE_TIMEOUT", 5.0)
+    lines = ["a" * 24 + "!"] * 100_000
+    with pytest.raises(log_search.SearchTimeout):
+        find_matches(lines, [None] * len(lines), [evil], False, use_regex=True)
+
+
+def test_regex_module_keeps_re_semantics():
+    lines = ["ERROR x", "err", "Error: y"]
+    times = [None] * 3
+    assert find_matches(lines, times, [r"^err(or)?$"], False, use_regex=True) == [1]
+    assert find_matches(lines, times, [r"\berror\b"], False, use_regex=True) == [0, 2]
+    assert find_matches(lines, times, [r"(?i)ERROR"], False, use_regex=True, case_sensitive=True) == [0, 2]

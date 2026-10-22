@@ -16,6 +16,7 @@ from streamlit.testing.v1 import AppTest
 
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
+sys.path.insert(0, str(ROOT / "streamlit_app"))
 from streamlit_app.preset_utils import normalize_preset
 import launch
 
@@ -200,6 +201,16 @@ class AppRegressionTests(unittest.TestCase):
         self.app.text_input[0].input("(unclosed").run()
         self.assertHealthy()
         self.assertTrue(any("正規表達式語法錯誤" in item.value for item in self.app.error))
+
+    def test_catastrophic_regex_shows_timeout_instead_of_hanging(self):
+        import log_search
+        self.upload("long.log", "a" * 5000 + "!")
+        with patch.object(log_search, "REGEX_LINE_TIMEOUT", 0.2):
+            self.app.text_input[0].input("(a+)+$").run()
+            self.app.checkbox(key="use_regex").check().run()
+        self.assertHealthy()
+        self.assertTrue(any("逾時" in item.value for item in self.app.error))
+        self.assertFalse(any("log-table\">" in item.value for item in self.app.markdown))
 
     def test_theme_is_kept_in_query_params(self):
         self.app.selectbox(key="theme_name").set_value("Dracula (吸血鬼)").run()

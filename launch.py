@@ -19,6 +19,7 @@ PORT = 8686
 def dependency_ready():
     try:
         version = importlib.metadata.version("streamlit")
+        importlib.metadata.version("regex")
         return tuple(int(part) for part in version.split(".")[:2]) >= (1, 40)
     except (importlib.metadata.PackageNotFoundError, ValueError):
         return False

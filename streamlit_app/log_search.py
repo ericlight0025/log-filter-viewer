@@ -3,10 +3,40 @@
 import datetime
 import html
 import re
+import time
+
+# 使用者自訂的正規表達式交給 regex 套件執行：語法與 re 相容，且支援逾時，
+# 避免 (a+)+$ 這類巢狀量詞讓整個服務卡死（ReDoS）。固定字串關鍵字仍用內建 re。
+import regex
 
 
 # HTML 版與 Streamlit 版共用的展示上限（含上下文、合併後的實際行數）
 MAX_DISPLAY_ROWS = 50_000
+# 單行比對逾時與整次搜尋／高亮的總時間預算（秒）
+REGEX_LINE_TIMEOUT = 2.0
+SEARCH_TIME_LIMIT = 15.0
+# 使用者 regex 的語法錯誤可能來自 re 或 regex 套件
+RegexError = (re.error, regex.error)
+
+
+class SearchTimeout(TimeoutError):
+    """正規表達式執行超過時間預算；訊息可直接顯示給使用者。"""
+
+    def __init__(self, what="搜尋"):
+        super().__init__(f"正規表達式{what}逾時（超過 {SEARCH_TIME_LIMIT:g} 秒），"
+                         "請簡化表達式，避免巢狀量詞如 (a+)+，或縮小搜尋範圍。")
+
+
+class _Deadline:
+    """每隔一批行檢查一次總時間預算，檢查成本遠低於逐行比對。"""
+
+    def __init__(self, what, limit=SEARCH_TIME_LIMIT, every=2048):
+        self.what, self.deadline, self.every, self.count = what, time.monotonic() + limit, every, 0
+
+    def tick(self):
+        self.count += 1
+        if self.count % self.every == 0 and time.monotonic() > self.deadline:
+            raise SearchTimeout(self.what)
 SEPARATOR_TEXT = "-" * 70
 
 # 支援 Log4j / Spring / Linux 常見時間格式 (包含逗號毫秒)
@@ -86,8 +116,9 @@ def compile_terms(terms, use_regex=False, case_sensitive=False):
     非正規表達式且不分大小寫時，判斷函式預期收到已轉小寫的行。
     """
     if use_regex:
-        flags = 0 if case_sensitive else re.IGNORECASE
-        return [re.compile(term, flags).search for term in terms]
+        flags = 0 if case_sensitive else regex.IGNORECASE
+        compiled = [regex.compile(term, flags) for term in terms]
+        return [lambda text, pat=pat: pat.search(text, timeout=REGEX_LINE_TIMEOUT) for pat in compiled]
     if not case_sensitive:
         terms = [term.lower() for term in terms]
     return [lambda text, term=term: term in text for term in terms]
@@ -95,24 +126,34 @@ def compile_terms(terms, use_regex=False, case_sensitive=False):
 
 def find_matches(lines, line_times, keywords, is_and, start=None, end=None,
                  exclude=(), use_regex=False, case_sensitive=False):
-    """回傳命中的行號 (0-based)；沒有關鍵字時為純時間過濾模式，符合任一排除條件的行一律略過。"""
+    """回傳命中的行號 (0-based)；沒有關鍵字時為純時間過濾模式，符合任一排除條件的行一律略過。
+
+    正規表達式模式下超過時間預算會拋出 SearchTimeout。
+    """
     include = compile_terms(keywords, use_regex, case_sensitive)
     excluded = compile_terms(exclude, use_regex, case_sensitive)
     fold = not use_regex and not case_sensitive
     check = all if is_and else any
     time_filter = start is not None and end is not None
+    deadline = _Deadline("搜尋") if use_regex else None
     matches = []
-    for i, line in enumerate(lines):
-        if time_filter:
-            t = line_times[i]
-            if t is None or not (start <= t <= end):
+    try:
+        for i, line in enumerate(lines):
+            if deadline:
+                deadline.tick()
+            if time_filter:
+                t = line_times[i]
+                if t is None or not (start <= t <= end):
+                    continue
+            text = line.lower() if fold else line
+            if include and not check(match(text) for match in include):
                 continue
-        text = line.lower() if fold else line
-        if include and not check(match(text) for match in include):
-            continue
-        if any(match(text) for match in excluded):
-            continue
-        matches.append(i)
+            if any(match(text) for match in excluded):
+                continue
+            matches.append(i)
+    except TimeoutError as exc:
+        # regex 套件的單行逾時也以同一種錯誤回報
+        raise SearchTimeout("搜尋") from exc
     return matches
 
 
@@ -143,21 +184,30 @@ def build_highlighter(terms, use_regex=False, case_sensitive=False):
         # 依長度降序排列，讓較長的關鍵字優先命中
         patterns.sort(key=len, reverse=True)
     groups = {f"_kw{i}": colors[p] for i, p in enumerate(patterns)}
-    combined = re.compile(
-        "|".join(f"(?P<_kw{i}>{p if use_regex else re.escape(p)})" for i, p in enumerate(patterns)),
-        0 if case_sensitive else re.IGNORECASE,
-    )
+    source = "|".join(f"(?P<_kw{i}>{p if use_regex else re.escape(p)})" for i, p in enumerate(patterns))
+    if use_regex:
+        combined = regex.compile(source, 0 if case_sensitive else regex.IGNORECASE)
+        find_all = lambda text: combined.finditer(text, timeout=REGEX_LINE_TIMEOUT)
+    else:
+        combined = re.compile(source, 0 if case_sensitive else re.IGNORECASE)
+        find_all = combined.finditer
+    deadline = _Deadline("高亮", every=256) if use_regex else None
 
     def highlight(raw_text):
         out = []
         pos = 0
-        for match in combined.finditer(raw_text):
-            if match.start() == match.end():
-                continue
-            out.append(html.escape(raw_text[pos:match.start()]))
-            color = groups.get(match.lastgroup, 0)
-            out.append(f'<span class="highlight highlight-{color}">{html.escape(match.group(0))}</span>')
-            pos = match.end()
+        try:
+            if deadline:
+                deadline.tick()
+            for match in find_all(raw_text):
+                if match.start() == match.end():
+                    continue
+                out.append(html.escape(raw_text[pos:match.start()]))
+                color = groups.get(match.lastgroup, 0)
+                out.append(f'<span class="highlight highlight-{color}">{html.escape(match.group(0))}</span>')
+                pos = match.end()
+        except TimeoutError as exc:
+            raise SearchTimeout("高亮") from exc
         out.append(html.escape(raw_text[pos:]))
         return "".join(out)
 

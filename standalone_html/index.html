@@ -711,6 +711,7 @@ function loadFile(file) {
     }
     currentFile = file;
     fileName = file.name;
+    loadedFileVersion += 1;
     // 與 Streamlit 版一致：檔尾換行不算成多一行空白行
     logLines = text.replace(/\r?\n$/, '').split(/\r?\n/);
 
@@ -982,19 +983,39 @@ function searchLog() {
   }
 
   const options = getMatchOptions();
+  const terms = getKeywordTerms();
+  const request = { keywords, matchMode, isTimeFilterOn, stStr, etStr, options, contextSize, terms };
+
+  // 正規表達式由使用者輸入，(a+)+$ 這類樣式可能讓比對永遠跑不完（ReDoS）；
+  // 交給 Web Worker 執行並設定逾時，主畫面不會凍結，逾時可直接中止。
+  if (options.useRegex && typeof Worker !== 'undefined') {
+    runSearchInWorker(request);
+    return;
+  }
+
   let matches;
   try {
     matches = findMatches(keywords, matchMode, isTimeFilterOn, stStr, etStr, options);
   } catch (error) {
-    currentMergedRanges = [];
-    logContainer.innerHTML = '';
-    placeholder.style.display = '';
-    placeholder.textContent = `正規表達式語法錯誤：${error.message}`;
-    logContainer.appendChild(placeholder);
-    matchCount.innerHTML = '';
-    copyBtn.disabled = true;
+    showSearchError(`正規表達式語法錯誤：${error.message}`);
     return;
   }
+  finishSearch(matches, request, null);
+}
+
+function showSearchError(message) {
+  currentMergedRanges = [];
+  logContainer.innerHTML = '';
+  placeholder.style.display = '';
+  placeholder.textContent = message;
+  logContainer.appendChild(placeholder);
+  matchCount.innerHTML = '';
+  copyBtn.disabled = true;
+}
+
+// prebuiltHtml：Worker 已在背景組好的表格 HTML；同步路徑傳 null 於主執行緒渲染
+function finishSearch(matches, request, prebuiltHtml) {
+  const { contextSize, terms, options } = request;
   matchCount.innerHTML = `符合: <strong>${matches.length.toLocaleString()}</strong> 行`;
 
   if (matches.length === 0) {
@@ -1008,7 +1029,7 @@ function searchLog() {
   }
 
   // 大量結果保護
-  if (matches.length > 50000) {
+  if (matches.length > MAX_DISPLAY_ROWS) {
     currentMergedRanges = [];
     logContainer.innerHTML = '';
     placeholder.style.display = '';
@@ -1018,15 +1039,10 @@ function searchLog() {
     return;
   }
 
-  const ranges = matches.map(m => [
-    Math.max(0, m - contextSize),
-    Math.min(logLines.length - 1, m + contextSize)
-  ]);
-
-  currentMergedRanges = mergeRanges(ranges);
+  currentMergedRanges = contextRanges(matches, contextSize, logLines.length);
   // 保護實際將渲染的行數，包含上下文且不重複計算重疊區間。
-  const displayRows = currentMergedRanges.reduce((count, [start, end]) => count + end - start + 1, 0);
-  if (displayRows > 50000) {
+  const displayRows = countRows(currentMergedRanges);
+  if (displayRows > MAX_DISPLAY_ROWS) {
     currentMergedRanges = [];
     logContainer.innerHTML = '';
     placeholder.style.display = '';
@@ -1035,8 +1051,111 @@ function searchLog() {
     copyBtn.disabled = true;
     return;
   }
-  renderResults(currentMergedRanges, new Set(matches), buildHighlighter(getKeywordTerms(), options));
+  if (prebuiltHtml !== null && prebuiltHtml !== undefined) {
+    placeholder.style.display = 'none';
+    logContainer.innerHTML = prebuiltHtml;
+  } else {
+    renderResults(currentMergedRanges, new Set(matches), buildHighlighter(terms, options));
+  }
   copyBtn.disabled = false;
+}
+
+// =====================
+// 5b. 正規表達式搜尋的 Web Worker
+// =====================
+const MAX_DISPLAY_ROWS = 50000;
+let REGEX_WORKER_TIMEOUT_MS = 8000;
+let regexWorker = null;
+let regexWorkerLoadedFile = -1;   // Worker 內已載入的日誌版本
+let loadedFileVersion = 0;        // 每次載入檔案 +1
+let workerSearchSeq = 0;
+let workerTimer = null;
+let pendingRequest = null;
+
+// Worker 程式碼直接取自主執行緒的純函式，兩邊永遠同一份邏輯
+function buildWorkerSource() {
+  const fns = [compileTerms, findMatchesIn, mergeRanges, contextRanges, countRows, buildHighlighter, buildTableHtml, escapeHtml];
+  return fns.map(fn => fn.toString()).join('\n') + `
+let lines = [], timestamps = new Float64Array(0);
+self.onmessage = function (event) {
+  const msg = event.data;
+  if (msg.type === 'load') { lines = msg.lines; timestamps = msg.timestamps; return; }
+  try {
+    const r = msg.request;
+    const matches = findMatchesIn(lines, timestamps, r.keywords, r.matchMode, r.isTimeFilterOn, r.stStr, r.etStr, r.options);
+    let html = null;
+    if (matches.length > 0 && matches.length <= msg.maxRows) {
+      const ranges = contextRanges(matches, r.contextSize, lines.length);
+      if (countRows(ranges) <= msg.maxRows) {
+        html = buildTableHtml(lines, ranges, new Set(matches), buildHighlighter(r.terms, r.options));
+      }
+    }
+    self.postMessage({ type: 'result', id: msg.id, matches, html });
+  } catch (error) {
+    self.postMessage({ type: 'error', id: msg.id, message: error.message });
+  }
+};`;
+}
+
+function stopRegexWorker() {
+  if (workerTimer) { clearTimeout(workerTimer); workerTimer = null; }
+  if (regexWorker) { regexWorker.terminate(); regexWorker = null; }
+  regexWorkerLoadedFile = -1;
+  searchBtn.disabled = false;
+}
+
+function runSearchInWorker(request) {
+  const id = ++workerSearchSeq;
+  if (workerTimer) { clearTimeout(workerTimer); workerTimer = null; }
+  try {
+    if (!regexWorker) {
+      const blob = new Blob([buildWorkerSource()], { type: 'application/javascript' });
+      regexWorker = new Worker(URL.createObjectURL(blob));
+      regexWorker.onmessage = onWorkerMessage;
+      regexWorker.onerror = () => { stopRegexWorker(); showSearchError('背景搜尋發生錯誤，請重試。'); };
+    }
+    if (regexWorkerLoadedFile !== loadedFileVersion) {
+      // 日誌只在換檔時複製一次進 Worker，之後的搜尋只傳條件
+      regexWorker.postMessage({ type: 'load', lines: logLines, timestamps: lineTimestamps });
+      regexWorkerLoadedFile = loadedFileVersion;
+    }
+  } catch (_) {
+    // 環境不支援 Blob Worker（例如某些 file:// 限制）時退回同步搜尋
+    stopRegexWorker();
+    try {
+      finishSearch(findMatches(request.keywords, request.matchMode, request.isTimeFilterOn, request.stStr, request.etStr, request.options), request, null);
+    } catch (error) {
+      showSearchError(`正規表達式語法錯誤：${error.message}`);
+    }
+    return;
+  }
+
+  searchBtn.disabled = true;
+  currentMergedRanges = [];
+  copyBtn.disabled = true;
+  logContainer.innerHTML = '';
+  placeholder.style.display = '';
+  placeholder.textContent = '正規表達式搜尋中…';
+  logContainer.appendChild(placeholder);
+  pendingRequest = request;
+  regexWorker.postMessage({ type: 'search', id, request, maxRows: MAX_DISPLAY_ROWS });
+  workerTimer = setTimeout(() => {
+    stopRegexWorker();
+    showSearchError(`正規表達式搜尋逾時（超過 ${REGEX_WORKER_TIMEOUT_MS / 1000} 秒），已中止。請簡化表達式，避免巢狀量詞如 (a+)+，或縮小搜尋範圍。`);
+  }, REGEX_WORKER_TIMEOUT_MS);
+}
+
+function onWorkerMessage(event) {
+  const msg = event.data;
+  if (msg.id !== workerSearchSeq) return;   // 已有更新的搜尋，忽略舊結果
+  if (workerTimer) { clearTimeout(workerTimer); workerTimer = null; }
+  searchBtn.disabled = false;
+  if (msg.type === 'error') {
+    showSearchError(`正規表達式語法錯誤：${msg.message}`);
+    return;
+  }
+  // 超過上限時 Worker 不會組 HTML，finishSearch 會依數量顯示保護提示
+  finishSearch(msg.matches, pendingRequest, msg.html);
 }
 
 function compileTerms(terms, { useRegex = false, caseSensitive = false } = {}) {
@@ -1054,6 +1173,11 @@ function compileTerms(terms, { useRegex = false, caseSensitive = false } = {}) {
 }
 
 function findMatches(keywords, matchMode, isTimeFilterOn, stStr, etStr, options = {}) {
+  return findMatchesIn(logLines, lineTimestamps, keywords, matchMode, isTimeFilterOn, stStr, etStr, options);
+}
+
+// 純函式版本：不碰全域變數，可在 Web Worker 內執行
+function findMatchesIn(logLines, lineTimestamps, keywords, matchMode, isTimeFilterOn, stStr, etStr, options = {}) {
   const include = compileTerms(keywords, options);
   const excluded = compileTerms(options.exclude || [], options);
   const fold = !options.useRegex && !options.caseSensitive;
@@ -1090,6 +1214,14 @@ function findMatches(keywords, matchMode, isTimeFilterOn, stStr, etStr, options 
   }
 
   return result;
+}
+
+function contextRanges(matches, contextSize, totalLines) {
+  return mergeRanges(matches.map(m => [Math.max(0, m - contextSize), Math.min(totalLines - 1, m + contextSize)]));
+}
+
+function countRows(ranges) {
+  return ranges.reduce((count, [start, end]) => count + end - start + 1, 0);
 }
 
 function mergeRanges(ranges) {
@@ -1146,7 +1278,11 @@ function buildHighlighter(terms, { useRegex = false, caseSensitive = false } = {
 
 function renderResults(mergedRanges, matchSet, highlight) {
   placeholder.style.display = 'none';
+  logContainer.innerHTML = buildTableHtml(logLines, mergedRanges, matchSet, highlight);
+}
 
+// 純函式版本：只組字串，可在 Web Worker 內執行
+function buildTableHtml(logLines, mergedRanges, matchSet, highlight) {
   const fragments = ['<table class="log-table">'];
 
   for (let ri = 0; ri < mergedRanges.length; ri++) {
@@ -1168,7 +1304,7 @@ function renderResults(mergedRanges, matchSet, highlight) {
   }
 
   fragments.push('</table>');
-  logContainer.innerHTML = fragments.join('');
+  return fragments.join('');
 }
 
 // =====================

@@ -41,6 +41,7 @@
   * **⚪ 符合全部 (AND)**：日誌行必須同時包含所有關鍵字才算命中（適合精準鎖定特定元件的特定錯誤）。
 * **進階比對選項**：
   * **正規表達式**：關鍵字改以正規表達式比對，例如 `timeout|refused`、`status=5\d\d`。Streamlit 版使用 Python 語法，HTML 版使用 JavaScript 語法，常用寫法兩者相同；語法錯誤會直接提示。
+  * 正規表達式有逾時保護：`(a+)+$` 這類巢狀量詞可能讓比對永遠跑不完（ReDoS），Streamlit 版超過 15 秒、HTML 版超過 8 秒會中止並提示，不會讓服務或分頁卡死。HTML 版的正規表達式搜尋在背景 Web Worker 執行，搜尋中畫面仍可操作。
   * **區分大小寫**：預設不分大小寫，勾選後 `ERROR` 與 `error` 視為不同。
   * **🚫 排除關鍵字**：含此字串的行一律不顯示（例如排除 `health-check`）；正規表達式模式下可用 `a|b` 一次排除多個。
 
@@ -106,7 +107,7 @@ log-filter-viewer/
 ├── start.bat                   # Windows 一鍵啟動腳本 (自動檢查依賴並開啟瀏覽器)
 ├── run.bat                     # Windows 啟動腳本別名
 ├── launch.py                   # 依賴檢查、服務與瀏覽器啟動
-├── requirements.txt            # Python 依賴清單 (streamlit>=1.40.0)
+├── requirements.txt            # Python 依賴清單 (streamlit、regex)
 ├── requirements-dev.txt        # 測試依賴 (pytest)
 ├── LICENSE                     # 完整官方 MIT 開源授權條款
 ├── .gitignore                  # Git 忽略設定
