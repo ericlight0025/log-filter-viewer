@@ -27,8 +27,7 @@ class Element {
 }
 
 const root = path.resolve(__dirname, '..');
-const files = ['log-filter.html', 'index.html'].map(name => fs.readFileSync(path.join(root, 'standalone_html', name), 'utf8'));
-assert.equal(files[0], files[1], '兩個單檔版本必須一致');
+const source = fs.readFileSync(path.join(root, 'standalone_html', 'index.html'), 'utf8');
 const elements = new Map();
 const document = {
   body: new Element(), createElement: () => new Element(),
@@ -40,7 +39,7 @@ const context = {
   alert: message => { throw new Error(message); }, localStorage: {getItem() { return null; }, setItem() {}}
 };
 vm.createContext(context);
-vm.runInContext(files[0].match(/<script>([\s\S]*?)<\/script>/)[1], context);
+vm.runInContext(source.match(/<script>([\s\S]*?)<\/script>/)[1], context);
 const run = source => vm.runInContext(source, context);
 const plain = value => JSON.parse(JSON.stringify(value));
 

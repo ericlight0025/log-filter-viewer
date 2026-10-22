@@ -81,8 +81,7 @@ log-filter-viewer/
 │   ├── app.py                  # Streamlit 主程式 (支援自動轉接與雙點擊啟動)
 │   └── preset_utils.py         # 設定檔驗證與舊版格式相容
 ├── standalone_html/            # 零依賴純前端單檔版本 (可離線獨立運作)
-│   ├── index.html              # 主頁面
-│   └── log-filter.html         # 完整功能單一檔案版
+│   └── index.html              # 完整功能單一檔案版 (可單獨複製分享)
 ├── samples/                    # 測試範例與預設設定檔
 │   ├── sample-server.log       # 247 行 Java 伺服器除錯範例 Log
 │   └── example-preset.json     # 關鍵字與查詢條件預設檔範例
@@ -133,7 +132,7 @@ py streamlit_app/app.py
 
 ### 方式三：純前端單檔版 (免安裝任何環境)
 
-直接雙擊開啟 `standalone_html/index.html` 或 `standalone_html/log-filter.html` 即可使用。
+直接雙擊開啟 `standalone_html/index.html` 即可使用；這個檔案可單獨複製給同事，不需要其他檔案。
 
 ---
 

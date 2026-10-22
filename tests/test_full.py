@@ -107,14 +107,14 @@ print('  -> 通過 (±3 行上下文區間合併運算正常，無重疊行號)'
 # 6. 測試純前端 HTML 版本 (index.html / log-filter.html)
 # ----------------------------------------------------------------------
 print('[測試 6/7] 測試純前端單檔版語法與安全高亮邏輯...')
-html_path = repo_root / 'standalone_html/log-filter.html'
+html_path = repo_root / 'standalone_html/index.html'
 with open(html_path, 'r', encoding='utf-8') as f:
     html_content = f.read()
 assert 'safeHighlight' in html_content, 'HTML 缺少 safeHighlight 安全高亮'
 assert 'mergeRanges' in html_content, 'HTML 缺少 mergeRanges 合併演算法'
 assert 'exportPreset' in html_content, 'HTML 缺少 exportPreset 條件匯出'
-assert html_content == (repo_root / 'standalone_html/index.html').read_text(encoding='utf-8'), '兩個 HTML 版本不同步'
-print('  -> 通過 (HTML 版本一致；JavaScript 行為另由 test_html.cjs 驗證)')
+assert not (repo_root / 'standalone_html/log-filter.html').exists(), '單檔版只保留 index.html，避免兩份內容分歧'
+print('  -> 通過 (JavaScript 行為另由 test_html.cjs 驗證)')
 
 # ----------------------------------------------------------------------
 # 7. 測試啟動腳本 (start.bat / run.bat)
