@@ -3,6 +3,7 @@ import os
 import streamlit as st
 import json
 import datetime
+import re
 import uuid
 import hashlib
 
@@ -11,8 +12,8 @@ APP_DIR = os.path.dirname(os.path.abspath(__file__))
 if APP_DIR not in sys.path:
     sys.path.insert(0, APP_DIR)
 from preset_utils import CONTEXT_OPTIONS, MODE_LABELS, normalize_preset
-from log_search import (MAX_DISPLAY_ROWS, build_highlighter, context_ranges, count_rows,
-                        export_text, find_matches, index_times, render_table)
+from log_search import (MAX_DISPLAY_ROWS, build_highlighter, compile_terms, context_ranges,
+                        count_rows, export_text, find_matches, index_times, render_table)
 
 # 支援直接使用 `python app.py` 或 `py app.py` 啟動，自動轉接至 Streamlit 服務
 if __name__ == "__main__":
@@ -99,8 +100,10 @@ THEMES = {
 
 
 
+THEME_SLUGS = dict(zip(["obsidian", "github", "dracula", "monokai"], THEMES))
+
 # ==============================================================================
-# 時間解析與工具函式
+# 工具函式
 # ==============================================================================
 def set_time_range(start, end):
     """保存隱藏的時間條件，並在建立元件前同步元件狀態。"""
@@ -184,6 +187,9 @@ def apply_preset(preset):
     st.session_state.match_mode = MODE_LABELS[preset["matchMode"]]
     st.session_state.context_lines = preset["contextLines"]
     st.session_state.enable_time = preset["enableTimeFilter"]
+    st.session_state.use_regex = preset["useRegex"]
+    st.session_state.case_sensitive = preset["caseSensitive"]
+    st.session_state.exclude_keyword = preset["excludeKeyword"]
     start, end = st.session_state.time_range
     if preset["startTime"]:
         start = datetime.datetime.fromisoformat(preset["startTime"])
@@ -193,14 +199,15 @@ def apply_preset(preset):
     set_time_range(start, end)
 
 @st.cache_data(max_entries=16, show_spinner=False)
-def search_log(log_key, _lines, _line_times, keywords, is_and, start, end):
+def search_log(log_key, _lines, _line_times, keywords, is_and, start, end, exclude, use_regex, case_sensitive):
     """底線開頭的參數不參與雜湊；log_key 已代表日誌內容。"""
-    return find_matches(_lines, _line_times, keywords, is_and, start, end)
+    return find_matches(_lines, _line_times, keywords, is_and, start, end, exclude, use_regex, case_sensitive)
 
 
 @st.cache_data(max_entries=8, show_spinner=False)
-def render_log_table(log_key, _lines, ranges, matches, highlight_terms):
-    return render_table(_lines, ranges, set(matches), build_highlighter(highlight_terms))
+def render_log_table(log_key, _lines, ranges, matches, highlight_terms, use_regex, case_sensitive):
+    highlight = build_highlighter(highlight_terms, use_regex, case_sensitive)
+    return render_table(_lines, ranges, set(matches), highlight)
 
 
 # 初始化 Session State
@@ -219,6 +226,7 @@ for state_key, default in {
     "log_upload_generation": 0, "loaded_upload": None, "log_error": "", "log_notice": "",
     "imported_preset": None, "preset_error": "", "preset_time_range": False,
     "match_mode": MODE_LABELS["or"], "context_lines": 5, "enable_time": False,
+    "use_regex": False, "case_sensitive": False, "exclude_keyword": "",
 }.items():
     if state_key not in st.session_state:
         st.session_state[state_key] = default
@@ -239,13 +247,19 @@ with st.sidebar:
     
     # 選擇日誌閱讀主題 (預設為 Obsidian 黑曜石風格)
     st.subheader("🎨 日誌主題 (Theme)")
+    # 主題記在網址參數 ?theme=，重新整理或加入書籤後仍會保留
+    if "theme_name" not in st.session_state:
+        st.session_state.theme_name = THEME_SLUGS.get(st.query_params.get("theme"), next(iter(THEMES)))
     selected_theme_name = st.selectbox(
         "選擇閱讀主題",
         options=list(THEMES.keys()),
-        index=0,
+        key="theme_name",
         help="支援 Obsidian (黑曜石)、GitHub Dark、Dracula、Monokai 配色"
     )
     theme = THEMES[selected_theme_name]
+    theme_slug = next(slug for slug, name in THEME_SLUGS.items() if name == selected_theme_name)
+    if st.query_params.get("theme") != theme_slug:
+        st.query_params["theme"] = theme_slug
 
     st.divider()
 
@@ -420,7 +434,10 @@ st.title("📋 Log Filter Viewer")
 if st.session_state.log_lines:
     time_info = ""
     if st.session_state.min_time and st.session_state.max_time:
-        time_info = f" | 🕒 時間範圍: `{st.session_state.min_time.strftime('%H:%M:%S')}` ～ `{st.session_state.max_time.strftime('%H:%M:%S')}`"
+        # 跨日的日誌只顯示時:分:秒會無法分辨日期
+        span_days = st.session_state.min_time.date() != st.session_state.max_time.date()
+        fmt = "%Y-%m-%d %H:%M:%S" if span_days else "%H:%M:%S"
+        time_info = f" | 🕒 時間範圍: `{st.session_state.min_time.strftime(fmt)}` ～ `{st.session_state.max_time.strftime(fmt)}`"
     st.info(f"📂 目前檔案：**{st.session_state.file_name}** | 共 **{len(st.session_state.log_lines):,}** 行{time_info}")
 else:
     st.warning("👈 請先於左側邊欄選擇/上傳 Log 檔案，或點擊「📄 載入範例 Log」開始使用。")
@@ -463,6 +480,17 @@ with col_mode:
         key="match_mode",
         label_visibility="collapsed"
     )
+
+col_regex, col_case, col_exclude = st.columns([2, 2, 6])
+with col_regex:
+    use_regex = st.checkbox("正規表達式", key="use_regex", help="以 Python 正規表達式比對，例如 timeout|refused")
+with col_case:
+    case_sensitive = st.checkbox("區分大小寫", key="case_sensitive")
+with col_exclude:
+    exclude_keyword = st.text_input(
+        "排除關鍵字", key="exclude_keyword", label_visibility="collapsed",
+        placeholder="🚫 排除關鍵字：含此字串的行不顯示（正規表達式模式可用 a|b 排除多個）",
+    ).strip()
 
 # ------------------------------------------------------------------------------
 # 2. 時間區間過濾與 Context 設定
@@ -522,6 +550,9 @@ preset_payload = {
     "enableTimeFilter": enable_time,
     "startTime": st.session_state.time_range[0].isoformat(timespec="seconds"),
     "endTime": st.session_state.time_range[1].isoformat(timespec="seconds"),
+    "useRegex": use_regex,
+    "caseSensitive": case_sensitive,
+    "excludeKeyword": exclude_keyword,
 }
 st.sidebar.download_button(
     "💾 下載目前條件設定檔 (JSON)",
@@ -555,12 +586,20 @@ if not current_kws and not enable_time:
     st.info("💡 請至少輸入一個關鍵字，或勾選「啟用時間區間過濾」以開始分析日誌。")
     st.stop()
 
+exclude_terms = (exclude_keyword,) if exclude_keyword else ()
+if use_regex:
+    try:
+        compile_terms(current_kws + list(exclude_terms), use_regex=True)
+    except re.error as exc:
+        st.error(f"正規表達式語法錯誤：{exc}")
+        st.stop()
+
 log_lines = st.session_state.log_lines
 time_bounds = (start_dt, end_dt) if enable_time else (None, None)
 is_and = ("AND" in match_mode)
 # 搜尋與渲染依日誌內容雜湊與條件快取，切換主題等無關操作不會重新掃描整個檔案。
 matches = search_log(st.session_state.log_key, log_lines, st.session_state.line_times,
-                     tuple(current_kws), is_and, *time_bounds)
+                     tuple(current_kws), is_and, *time_bounds, exclude_terms, use_regex, case_sensitive)
 
 # 顯示統計
 col_stat, col_copy = st.columns([7, 3])
@@ -592,4 +631,4 @@ if display_rows > MAX_DISPLAY_ROWS:
 highlight_terms = tuple((item["val"].strip(), idx % 6)
                         for idx, item in enumerate(st.session_state.keyword_items) if item["val"].strip())
 st.markdown(render_log_table(st.session_state.log_key, log_lines, tuple(map(tuple, merged_ranges)),
-                             tuple(matches), highlight_terms), unsafe_allow_html=True)
+                             tuple(matches), highlight_terms, use_regex, case_sensitive), unsafe_allow_html=True)

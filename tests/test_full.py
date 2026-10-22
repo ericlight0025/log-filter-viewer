@@ -43,7 +43,7 @@ def test_full_acceptance():
     # 增加第二個關鍵字輸入框
     add_kw_btn = [b for b in at.button if '新增關鍵字' in b.label][0]
     add_kw_btn.click().run()
-    assert len(at.text_input) == 2, '動態增加關鍵字失敗'
+    assert len([t for t in at.text_input if t.key.startswith('kw_input_')]) == 2, '動態增加關鍵字失敗'
 
     # 設定第一個關鍵字: ERROR, 第二個關鍵字: timeout
     at.text_input[0].input('ERROR').run()
@@ -65,7 +65,7 @@ def test_full_acceptance():
     # 測試刪除第二個關鍵字
     del_btn = [b for b in at.button if b.label == '✕'][0]
     del_btn.click().run()
-    assert len(at.text_input) == 1, '刪除關鍵字失敗'
+    assert len([t for t in at.text_input if t.key.startswith('kw_input_')]) == 1, '刪除關鍵字失敗'
     print('  -> 通過 (多關鍵字動態增刪、OR 與 AND 比對運算皆正確)')
 
     # ----------------------------------------------------------------------

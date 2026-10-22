@@ -35,6 +35,16 @@ def normalize_preset(data):
     if type(enabled) is not bool:
         raise ValueError("時間過濾開關必須是布林值")
 
+    # 以下為新增的選填欄位，舊設定檔沒有時使用預設值
+    flags = {}
+    for name, label in [("useRegex", "正規表達式"), ("caseSensitive", "區分大小寫")]:
+        flags[name] = data.get(name, False)
+        if type(flags[name]) is not bool:
+            raise ValueError(f"{label}開關必須是布林值")
+    exclude = data.get("excludeKeyword", "")
+    if not isinstance(exclude, str):
+        raise ValueError("excludeKeyword 必須是字串")
+
     times = {}
     for canonical, legacy in [("startTime", "start_time"), ("endTime", "end_time")]:
         value = data.get(canonical, data.get(legacy, ""))
@@ -58,4 +68,6 @@ def normalize_preset(data):
         "contextLines": context,
         "enableTimeFilter": enabled,
         **times,
+        **flags,
+        "excludeKeyword": exclude.strip(),
     }
