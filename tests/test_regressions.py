@@ -170,6 +170,21 @@ class AppRegressionTests(unittest.TestCase):
         self.assertEqual(self.preset()["startTime"], "2026-09-25T15:00:00")
         self.assertEqual(self.preset()["matchMode"], "and")
 
+    def test_large_result_is_not_rendered_but_still_downloadable(self):
+        self.upload("big.log", "\n".join(["ERROR"] * 50_001))
+        self.assertTrue(any("展示行數過多" in item.value for item in self.app.warning))
+        self.assertFalse(any("log-table\">" in item.value for item in self.app.markdown))
+        exported = next(data for label, data in self.downloads.items() if ".txt" in label)
+        self.assertEqual(len(exported.splitlines()), 50_001)
+
+    def test_highlight_color_follows_keyword_badge(self):
+        self.upload("server.log", "ERROR timeout")
+        self.app.text_input[0].input("").run()
+        self.button("新增關鍵字").click().run()
+        self.app.text_input[1].input("timeout").run()
+        table = next(item.value for item in self.app.markdown if "log-table\">" in item.value)
+        self.assertIn('highlight-1">timeout', table)
+
 
 class PresetValidationTests(unittest.TestCase):
     def test_html_legacy_sample_and_zero_context(self):

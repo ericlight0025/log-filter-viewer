@@ -1,8 +1,6 @@
 import sys
 import os
 import streamlit as st
-import re
-import html
 import json
 import datetime
 import uuid
@@ -13,6 +11,8 @@ APP_DIR = os.path.dirname(os.path.abspath(__file__))
 if APP_DIR not in sys.path:
     sys.path.insert(0, APP_DIR)
 from preset_utils import CONTEXT_OPTIONS, MODE_LABELS, normalize_preset
+from log_search import (MAX_DISPLAY_ROWS, build_highlighter, context_ranges, count_rows,
+                        export_text, find_matches, index_times, render_table)
 
 # 支援直接使用 `python app.py` 或 `py app.py` 啟動，自動轉接至 Streamlit 服務
 if __name__ == "__main__":
@@ -102,71 +102,6 @@ THEMES = {
 # ==============================================================================
 # 時間解析與工具函式
 # ==============================================================================
-# 支援 Log4j / Spring / Linux 常見時間格式 (包含逗號毫秒)
-TIME_REGEX = re.compile(r'(\d{4}[-/]\d{2}[-/]\d{2}[ T]\d{2}:\d{2}:\d{2}(?:[.,]\d+)?)')
-
-def parse_time(line: str):
-    """解析行首附近的時間戳記為 datetime 物件"""
-    if not line:
-        return None
-    match = TIME_REGEX.search(line[:120])
-    if match:
-        raw_str = match.group(1).replace(',', '.').replace('/', '-')
-        if len(raw_str) >= 19 and raw_str[10] == ' ':
-            raw_str = raw_str[:10] + 'T' + raw_str[11:]
-        try:
-            return datetime.datetime.fromisoformat(raw_str)
-        except Exception:
-            pass
-    return None
-
-def merge_ranges(ranges):
-    """合併重疊或相鄰的 [start, end] 區間"""
-    if not ranges:
-        return []
-    sorted_ranges = sorted(ranges, key=lambda r: r[0])
-    merged = [list(sorted_ranges[0])]
-    for curr in sorted_ranges[1:]:
-        last = merged[-1]
-        if curr[0] <= last[1] + 1:
-            last[1] = max(last[1], curr[1])
-        else:
-            merged.append(list(curr))
-    return merged
-
-def safe_highlight(raw_text: str, keywords: list):
-    """使用 Regex Split 分割文字，100% 避免 HTML 實體被破壞的置換演算法"""
-    valid_kws = [k.strip() for k in keywords if k.strip()]
-    if not valid_kws:
-        return html.escape(raw_text)
-
-    # 建立關鍵字元資訊 (依長度降序排列)
-    unique_kws = list(dict.fromkeys(valid_kws))
-    unique_kws.sort(key=lambda s: len(s), reverse=True)
-
-    # 建構含有單一 Capture Group 的正規表達式
-    escaped_patterns = [re.escape(k) for k in unique_kws]
-    combined_regex = re.compile(f"({'|'.join(escaped_patterns)})", re.IGNORECASE)
-
-    parts = combined_regex.split(raw_text)
-    out = []
-    for i, part in enumerate(parts):
-        if not part:
-            continue
-        if i % 2 == 0:
-            out.append(html.escape(part))
-        else:
-            # 奇數項為關鍵字，找出對應的原始關鍵字顏色索引
-            match_lower = part.lower()
-            color_idx = 0
-            for orig_idx, orig_kw in enumerate(keywords):
-                if orig_kw.lower() == match_lower:
-                    color_idx = orig_idx % 6
-                    break
-            out.append(f'<span class="highlight highlight-{color_idx}">{html.escape(part)}</span>')
-    return "".join(out)
-
-
 def set_time_range(start, end):
     """保存隱藏的時間條件，並在建立元件前同步元件狀態。"""
     start = start.replace(microsecond=0)
@@ -181,18 +116,12 @@ def set_time_range(start, end):
 def load_log_content(content, name):
     """集中更新日誌資料與時間索引，保留沒有時間戳記的堆疊行。"""
     lines = content.splitlines()
-    line_times = []
-    last_time = None
-    for line in lines:
-        timestamp = parse_time(line)
-        if timestamp is not None:
-            last_time = timestamp
-        line_times.append(last_time)
-    valid_times = [t for t in line_times if t is not None]
+    line_times, min_time, max_time = index_times(lines)
+    # 內容雜湊只在載入時計算一次，作為搜尋結果快取的 key。
+    log_key = hashlib.sha256(content.encode("utf-8", "surrogatepass")).hexdigest()
     st.session_state.update(
-        file_name=name, log_lines=lines, line_times=line_times,
-        min_time=min(valid_times) if valid_times else None,
-        max_time=max(valid_times) if valid_times else None,
+        file_name=name, log_lines=lines, line_times=line_times, log_key=log_key,
+        min_time=min_time, max_time=max_time,
     )
     if not st.session_state.get("preset_time_range", False):
         now = datetime.datetime.now().replace(microsecond=0)
@@ -215,7 +144,7 @@ def reset_uploader():
 
 def clear_log():
     reset_uploader()
-    st.session_state.update(log_lines=[], line_times=[], file_name="", min_time=None, max_time=None)
+    st.session_state.update(log_lines=[], line_times=[], log_key="", file_name="", min_time=None, max_time=None)
     st.session_state.log_notice = ""
 
 
@@ -263,6 +192,17 @@ def apply_preset(preset):
     st.session_state.preset_time_range = bool(preset["startTime"] or preset["endTime"])
     set_time_range(start, end)
 
+@st.cache_data(max_entries=16, show_spinner=False)
+def search_log(log_key, _lines, _line_times, keywords, is_and, start, end):
+    """底線開頭的參數不參與雜湊；log_key 已代表日誌內容。"""
+    return find_matches(_lines, _line_times, keywords, is_and, start, end)
+
+
+@st.cache_data(max_entries=8, show_spinner=False)
+def render_log_table(log_key, _lines, ranges, matches, highlight_terms):
+    return render_table(_lines, ranges, set(matches), build_highlighter(highlight_terms))
+
+
 # 初始化 Session State
 if "keyword_items" not in st.session_state:
     st.session_state.keyword_items = [{"id": str(uuid.uuid4()), "val": "ERROR"}]
@@ -270,6 +210,7 @@ if "keyword_items" not in st.session_state:
 if "log_lines" not in st.session_state:
     st.session_state.log_lines = []
     st.session_state.line_times = []
+    st.session_state.log_key = ""
     st.session_state.file_name = ""
     st.session_state.min_time = None
     st.session_state.max_time = None
@@ -325,8 +266,9 @@ with st.sidebar:
     # 如果有上傳檔案
     if uploaded_file is not None:
         raw_bytes = uploaded_file.getvalue()
-        upload_id = (uploaded_file.name, getattr(uploaded_file, "file_id", None),
-                     hashlib.sha256(raw_bytes).hexdigest(), log_encoding)
+        # 每次重新上傳都會有新的 file_id，不必在每輪重跑時對整個檔案計算雜湊。
+        file_id = getattr(uploaded_file, "file_id", None) or hashlib.sha256(raw_bytes).hexdigest()
+        upload_id = (uploaded_file.name, file_id, len(raw_bytes), log_encoding)
         if upload_id != st.session_state.loaded_upload:
             try:
                 codec = {"UTF-8": "utf-8-sig", "Big5": "big5", "GB18030": "gb18030", "UTF-16": "utf-16"}[log_encoding]
@@ -614,35 +556,12 @@ if not current_kws and not enable_time:
     st.info("💡 請至少輸入一個關鍵字，或勾選「啟用時間區間過濾」以開始分析日誌。")
     st.stop()
 
-# 步驟 1: 找出所有命中的行號 (0-based)
 log_lines = st.session_state.log_lines
-line_times = st.session_state.line_times
-clean_kws = [k.lower() for k in current_kws]
+time_bounds = (start_dt, end_dt) if enable_time else (None, None)
 is_and = ("AND" in match_mode)
-
-matches = []
-for i, line in enumerate(log_lines):
-    # 時間過濾
-    if enable_time and start_dt and end_dt:
-        t = line_times[i]
-        if t:
-            if not (start_dt <= t <= end_dt):
-                continue
-        else:
-            continue
-
-    # 關鍵字過濾
-    if clean_kws:
-        line_lower = line.lower()
-        if is_and:
-            matched = all(k in line_lower for k in clean_kws)
-        else:
-            matched = any(k in line_lower for k in clean_kws)
-    else:
-        matched = True  # 純時間過濾模式
-
-    if matched:
-        matches.append(i)
+# 搜尋與渲染依日誌內容雜湊與條件快取，切換主題等無關操作不會重新掃描整個檔案。
+matches = search_log(st.session_state.log_key, log_lines, st.session_state.line_times,
+                     tuple(current_kws), is_and, *time_bounds)
 
 # 顯示統計
 col_stat, col_copy = st.columns([7, 3])
@@ -653,58 +572,25 @@ if not matches:
     st.warning("🤷 找不到符合條件的日誌行。")
     st.stop()
 
-# 步驟 2: 建立 ±context_lines 的區間
-total_lines = len(log_lines)
-raw_ranges = [
-    [max(0, m - context_lines), min(total_lines - 1, m + context_lines)]
-    for m in matches
-]
-
-# 步驟 3: 合併重疊或連續的區間 (防止重複顯示)
-merged_ranges = merge_ranges(raw_ranges)
-match_set = set(matches)
-
-# 步驟 4: 產生純文字輸出 (提供下載)
-export_text_lines = []
-for r_idx, (start, end) in enumerate(merged_ranges):
-    if r_idx > 0:
-        export_text_lines.append("----------------------------------------------------------------------")
-    for line_idx in range(start, end + 1):
-        export_text_lines.append(f"{(line_idx + 1):>6} | {log_lines[line_idx]}")
-
-final_export_text = "\n".join(export_text_lines)
+merged_ranges = context_ranges(matches, context_lines, len(log_lines))
+display_rows = count_rows(merged_ranges)
 
 with col_copy:
     st.download_button(
         "📋 下載過濾結果 (.txt)",
-        data=final_export_text,
+        data=export_text(log_lines, merged_ranges),
         file_name=f"filtered_log_{datetime.datetime.now().strftime('%Y%m%d_%H%M%S')}.txt",
         mime="text/plain",
         use_container_width=True
     )
 
-# 步驟 5: 渲染 HTML 表格 (含多色 Safe Highlight)
-table_rows = []
-for r_idx, (start, end) in enumerate(merged_ranges):
-    if r_idx > 0:
-        table_rows.append('<tr class="separator"><td colspan="2">⋯⋯⋯⋯⋯⋯</td></tr>')
+# 與 HTML 版相同的保護：過多行數一次塞進頁面會讓瀏覽器卡死，改提示使用者縮小範圍。
+if display_rows > MAX_DISPLAY_ROWS:
+    st.warning(f"⚠️ 含上下文的展示行數過多 ({display_rows:,} 行，上限 {MAX_DISPLAY_ROWS:,} 行)。"
+               "請縮小上下文、增加關鍵字或縮小時間範圍；仍可下載完整的過濾結果。")
+    st.stop()
 
-    for line_idx in range(start, end + 1):
-        is_match = (line_idx in match_set)
-        row_cls = "match" if is_match else "context"
-        
-        # 安全高亮
-        if is_match and current_kws:
-            content_html = safe_highlight(log_lines[line_idx], current_kws)
-        else:
-            content_html = html.escape(log_lines[line_idx])
-
-        table_rows.append(
-            f'<tr class="{row_cls}">'
-            f'<td class="line-no">{line_idx + 1}</td>'
-            f'<td class="line-content">{content_html}</td>'
-            f'</tr>'
-        )
-
-final_table_html = f'<div class="log-container"><table class="log-table">{"".join(table_rows)}</table></div>'
-st.markdown(final_table_html, unsafe_allow_html=True)
+highlight_terms = tuple((item["val"].strip(), idx % 6)
+                        for idx, item in enumerate(st.session_state.keyword_items) if item["val"].strip())
+st.markdown(render_log_table(st.session_state.log_key, log_lines, tuple(map(tuple, merged_ranges)),
+                             tuple(matches), highlight_terms), unsafe_allow_html=True)
