@@ -16,6 +16,10 @@ GEMINI.md
 .agentignore
 .geminiignore
 
-# Temporary presets or exported files
-*.json
-!example-preset.json
+# Exported presets and filtered results (named by the app at download time)
+log_preset_*.json
+log-preset-*.json
+filtered_log_*.txt
+
+# Test caches
+.pytest_cache/

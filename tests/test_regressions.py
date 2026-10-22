@@ -61,6 +61,9 @@ class AppRegressionTests(unittest.TestCase):
     def preset(self):
         return json.loads(next(data for label, data in self.downloads.items() if "JSON" in label))
 
+    def keyword_inputs(self):
+        return [item for item in self.app.text_input if item.key.startswith("kw_input_")]
+
     def button(self, label):
         return next(button for button in self.app.button if label in button.label)
 
@@ -103,18 +106,19 @@ class AppRegressionTests(unittest.TestCase):
         self.app.run()
         self.assertEqual(self.app.text_input[0].value, "WARN")
         self.button("新增關鍵字").click().run()
-        self.assertEqual(len(self.app.text_input), 2)
+        self.assertEqual(len(self.keyword_inputs()), 2)
         self.app.text_input[1].input("timeout").run()
         self.button("✕").click().run()
         self.app.run()
         self.assertHealthy()
-        self.assertEqual([item.value for item in self.app.text_input], ["timeout"])
+        self.assertEqual([item.value for item in self.keyword_inputs()], ["timeout"])
 
     def test_round_trip_and_import_before_log(self):
         expected = {
             "schemaVersion": 1, "keywords": ["ERROR", "timeout"], "matchMode": "and",
             "contextLines": 0, "enableTimeFilter": True,
             "startTime": "2026-09-24T10:01:05", "endTime": "2026-09-24T10:02:30",
+            "useRegex": False, "caseSensitive": True, "excludeKeyword": "OLD",
         }
         self.upload("preset.json", json.dumps(expected), preset=True)
         self.upload("server.log", "2026-09-24 10:00:00 ERROR timeout OLD\n"
@@ -170,6 +174,45 @@ class AppRegressionTests(unittest.TestCase):
         self.assertEqual(self.preset()["startTime"], "2026-09-25T15:00:00")
         self.assertEqual(self.preset()["matchMode"], "and")
 
+    def test_large_result_is_not_rendered_but_still_downloadable(self):
+        self.upload("big.log", "\n".join(["ERROR"] * 50_001))
+        self.assertTrue(any("展示行數過多" in item.value for item in self.app.warning))
+        self.assertFalse(any("log-table\">" in item.value for item in self.app.markdown))
+        exported = next(data for label, data in self.downloads.items() if ".txt" in label)
+        self.assertEqual(len(exported.splitlines()), 50_001)
+
+    def test_highlight_color_follows_keyword_badge(self):
+        self.upload("server.log", "ERROR timeout")
+        self.app.text_input[0].input("").run()
+        self.button("新增關鍵字").click().run()
+        self.app.text_input[1].input("timeout").run()
+        table = next(item.value for item in self.app.markdown if "log-table\">" in item.value)
+        self.assertIn('highlight-1">timeout', table)
+
+    def test_regex_exclude_and_invalid_regex(self):
+        self.upload("server.log", "ERROR timeout\nERROR refused\nERROR health-check\nINFO ok")
+        self.app.text_input[0].input("timeout|refused|health").run()
+        self.app.checkbox(key="use_regex").check().run()
+        self.app.text_input(key="exclude_keyword").input("refused").run()
+        self.assertTrue(any("**2**" in item.value for item in self.app.markdown if "搜尋結果" in item.value))
+        self.assertEqual(self.preset()["useRegex"], True)
+        self.assertEqual(self.preset()["excludeKeyword"], "refused")
+        self.app.text_input[0].input("(unclosed").run()
+        self.assertHealthy()
+        self.assertTrue(any("正規表達式語法錯誤" in item.value for item in self.app.error))
+
+    def test_theme_is_kept_in_query_params(self):
+        self.app.selectbox(key="theme_name").set_value("Dracula (吸血鬼)").run()
+        self.assertEqual(self.app.query_params["theme"], "dracula")
+        fresh = AppTest.from_file(str(ROOT / "streamlit_app/app.py"))
+        fresh.query_params["theme"] = "monokai"
+        fresh.run()
+        self.assertEqual(fresh.selectbox(key="theme_name").value, "Monokai (高對比黑金)")
+
+    def test_multi_day_log_shows_dates(self):
+        self.upload("days.log", "2026-09-24 23:59:00 A\n2026-09-25 00:01:00 B")
+        self.assertTrue(any("2026-09-24 23:59:00" in item.value for item in self.app.info))
+
 
 class PresetValidationTests(unittest.TestCase):
     def test_html_legacy_sample_and_zero_context(self):
@@ -183,7 +226,8 @@ class PresetValidationTests(unittest.TestCase):
         invalid = [None, [], {"keywords": [1]}, {"matchMode": []}, {"contextLines": True},
                    {"enableTimeFilter": "false"}, {"startTime": "2026-02-30T00:00:00"},
                    {"startTime": "2026-09-25T00:00:00", "endTime": "2026-09-24T00:00:00"},
-                   {"schemaVersion": 2}]
+                   {"schemaVersion": 2}, {"useRegex": "yes"}, {"caseSensitive": 1},
+                   {"excludeKeyword": ["x"]}]
         for data in invalid:
             with self.subTest(data=data), self.assertRaises(ValueError):
                 normalize_preset(data)

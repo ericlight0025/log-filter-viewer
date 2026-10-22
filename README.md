@@ -18,13 +18,14 @@
 ### 步驟 1：載入日誌檔案（左側邊欄）
 * **方式 A：上傳自訂日誌**
   * 在左側「檔案與設定」區塊，點擊 **`Browse files` / `Upload`**，或直接將本機的 `.log`、`.txt`、`.out` 檔案拖入拖曳區。
-  * Streamlit 版預設使用 UTF-8；遇到解碼錯誤，請選擇正確的 Big5、GB18030 或 UTF-16 編碼。讀取失敗會明確提示，不會靜默刪除字元；HTML 版請使用 UTF-8 日誌。
+  * 兩個版本預設都使用 UTF-8；遇到解碼錯誤，請選擇正確的 Big5、GB18030 或 UTF-16 編碼。讀取失敗會明確提示，不會靜默刪除字元。
   * 同名日誌更新後可重新上傳；「清空資料」與「載入範例」會同步重設上傳元件。
 * **方式 B：一鍵載入範例進行體驗**
   * 點擊 **`📄 載入範例 Log`** 按鈕，系統會立即載入專案內建的 `sample-server.log`（247 行實戰 Java 伺服器日誌）。
 * **狀態確認**：
   * 載入成功後，主畫面上方資訊列會顯示檔名、總行數以及自動偵測的時間跨度：  
-    `📂 目前檔案：sample-server.log | 共 247 行 | 🕒 時間範圍: 00:00:01 ～ 00:05:00`
+    `📂 目前檔案：sample-server.log | 共 247 行 | 🕒 時間範圍: 00:00:01 ～ 00:05:00`（跨日的日誌會一併顯示日期）
+* **閱讀主題**：Streamlit 版的主題會記在網址參數 `?theme=`（例如 `?theme=dracula`），重新整理或加入書籤後仍會保留；HTML 版則記在瀏覽器中。
 
 ---
 
@@ -38,6 +39,10 @@
 * **選擇比對邏輯**：
   * **🔴 符合任一 (OR)**：只要日誌行包含其中任一關鍵字即命中（適合廣泛抓取多種異常特徵）。
   * **⚪ 符合全部 (AND)**：日誌行必須同時包含所有關鍵字才算命中（適合精準鎖定特定元件的特定錯誤）。
+* **進階比對選項**：
+  * **正規表達式**：關鍵字改以正規表達式比對，例如 `timeout|refused`、`status=5\d\d`。Streamlit 版使用 Python 語法，HTML 版使用 JavaScript 語法，常用寫法兩者相同；語法錯誤會直接提示。
+  * **區分大小寫**：預設不分大小寫，勾選後 `ERROR` 與 `error` 視為不同。
+  * **🚫 排除關鍵字**：含此字串的行一律不顯示（例如排除 `health-check`）；正規表達式模式下可用 `a|b` 一次排除多個。
 
 ---
 
@@ -46,10 +51,11 @@
   * 勾選該選項後，會展開 **開始/結束日期**、**時:分下拉選單** 與 **秒數微調輸入框**。
   * 系統會自動帶入此檔案的最早與最晚時間，你可以手動將結束秒數由 `00:05:00` 縮減為 `00:01:30`，只聚焦故障發生的那 90 秒。
   * 若日誌包含多行 Exception Stack Trace（無獨立時間戳記），系統會智慧歸屬於前一行，保證錯誤堆疊不被裁切。
+  * 支援的時間格式：`2026-09-24 10:00:00`（含 `/`、`T` 與 `,`/`.` 毫秒變化）、Apache / Nginx 存取日誌 `[22/Oct/2026:14:00:00 +0800]`、syslog `Oct 22 14:00:00`。時區不做換算；syslog 沒有年份，一律視為今年。
 * **前後上下文行數 (Context)**：
   * 下拉選單可自訂展示範圍：`0行 (僅命中行)`、`±3行`、`±5行` (預設)、`±10行`、`±20行`、`±50行`。
   * 🧠 **智慧無重疊合併**：若第 44 行與第 46 行皆命中，系統會自動將重疊區間合為一個完整連續區塊，**同一個行號在畫面上絕不會重複列出兩次**。
-  * HTML 版以合併後的實際展示行數做保護，上限 50,000 行（包含上下文）；超過時請縮小上下文或搜尋範圍。
+  * 兩個版本都以合併後的實際展示行數做保護，上限 50,000 行（包含上下文）；超過時請縮小上下文或搜尋範圍。Streamlit 版此時仍可下載完整的過濾結果。
 
 ---
 
@@ -66,9 +72,9 @@
 * **📋 下載過濾結果 (.txt)**：
   * 點擊搜尋結果右上方的 **`📋 下載過濾結果 (.txt)`** 按鈕，可將目前畫面上合併排版好的內容（含對齊行號與分隔線）直接下載為乾淨的純文字檔，方便附在 Jira Issue 或貼到 Slack 討論。
 * **💾 條件設定檔 (Preset)**：
-  * **匯出**：在左側邊欄點擊 **`💾 下載目前條件設定檔 (JSON)`**，可儲存關鍵字、OR/AND 模式、前後行數、時間過濾開關與開始／結束日期時間。
+  * **匯出**：在左側邊欄點擊 **`💾 下載目前條件設定檔 (JSON)`**，可儲存關鍵字、OR/AND 模式、前後行數、時間過濾開關、開始／結束日期時間，以及正規表達式、區分大小寫與排除關鍵字設定。
   * **匯入**：在左側「匯入設定 (JSON)」上傳該檔案，即可瞬間復原完整的搜尋條件，便於同事之間重現除錯場景。
-  * 匯入只套用一次，之後可自由修改條件。兩版採用相同的 `schemaVersion: 1` 格式，並接受舊 HTML camelCase 與舊 Streamlit snake_case 欄位；舊檔案沒有儲存的時間無法還原。日期時間為日誌上的本地時間，不做時區換算。
+  * 匯入只套用一次，之後可自由修改條件。兩版採用相同的 `schemaVersion: 1` 格式（`useRegex`、`caseSensitive`、`excludeKeyword` 為選填欄位，舊設定檔照常可用），並接受舊 HTML camelCase 與舊 Streamlit snake_case 欄位；舊檔案沒有儲存的時間無法還原。日期時間為日誌上的本地時間，不做時區換算。
   * 明確匯入的時間會保留至後續檔案載入，方便重現相同區間；HTML 版可用時間重設按鈕恢復檔案範圍。
 
 ---
@@ -79,24 +85,29 @@
 log-filter-viewer/
 ├── streamlit_app/              # 現代化 Streamlit Web 應用模組
 │   ├── app.py                  # Streamlit 主程式 (支援自動轉接與雙點擊啟動)
+│   ├── log_search.py           # 時間解析、搜尋、區間合併與渲染 (純函式)
 │   └── preset_utils.py         # 設定檔驗證與舊版格式相容
 ├── standalone_html/            # 零依賴純前端單檔版本 (可離線獨立運作)
-│   ├── index.html              # 主頁面
-│   └── log-filter.html         # 完整功能單一檔案版
+│   └── index.html              # 完整功能單一檔案版 (可單獨複製分享)
 ├── samples/                    # 測試範例與預設設定檔
 │   ├── sample-server.log       # 247 行 Java 伺服器除錯範例 Log
 │   └── example-preset.json     # 關鍵字與查詢條件預設檔範例
-├── tests/                      # 自動化驗收測試套件
+├── tests/                      # 自動化測試套件 (python -m pytest)
 │   ├── test_full.py            # 7 項基礎驗收檢查
+│   ├── test_log_search.py      # 搜尋、合併、高亮純函式單元測試
 │   ├── test_regressions.py     # 檔案／設定／編碼／啟動回歸測試
+│   ├── test_html_js.py         # 以 pytest 執行 test_html.cjs
 │   └── test_html.cjs           # HTML JavaScript 行為測試（Node.js）
+├── .github/workflows/tests.yml # GitHub Actions：Ubuntu 與 Windows 自動測試
 ├── docs/                       # 文件資產
 │   └── images/
 │       └── preview.png         # 介面預覽截圖
-├── start.bat                   # Windows 一鍵啟動腳本 (自動開瀏覽器與解除 6666 限制)
+├── .streamlit/config.toml       # 預設 Port 8686、只監聽 127.0.0.1
+├── start.bat                   # Windows 一鍵啟動腳本 (自動檢查依賴並開啟瀏覽器)
 ├── run.bat                     # Windows 啟動腳本別名
 ├── launch.py                   # 依賴檢查、服務與瀏覽器啟動
 ├── requirements.txt            # Python 依賴清單 (streamlit>=1.40.0)
+├── requirements-dev.txt        # 測試依賴 (pytest)
 ├── LICENSE                     # 完整官方 MIT 開源授權條款
 ├── .gitignore                  # Git 忽略設定
 └── README.md                   # 專案說明文件 (包含操作手冊與授權詳解)
@@ -110,12 +121,12 @@ log-filter-viewer/
 
 直接在專案根目錄雙擊執行 **`start.bat`**（或 `run.bat`）：
 - 自動檢測 Python 環境與補齊依賴套件。
-- 自動啟動 Streamlit 服務（Port 6666）。
-- 自動開啟 Edge / Chrome 瀏覽器並帶上 `--explicitly-allowed-ports=6666` 參數解除瀏覽器安全阻擋。
+- 自動啟動 Streamlit 服務（Port 8686）。
+- 服務就緒後自動以預設瀏覽器開啟 `http://localhost:8686`。
 
 需要先安裝 Python；若 Streamlit 缺少或低於 1.40，首次啟動會透過目前 Python 的 pip 安裝 requirements，因此需要網路與套件安裝權限。服務預設只監聽本機 `127.0.0.1`。
 
-可用 `start.bat --dry-run` 檢查啟動計畫（不安裝、不啟動），或 `start.bat --no-browser` 只啟動服務。若瀏覽器已有執行中的視窗而忽略連接埠參數，請完全關閉該瀏覽器後再啟動。
+可用 `start.bat --dry-run` 檢查啟動計畫（不安裝、不啟動），或 `start.bat --no-browser` 只啟動服務。
 
 ### 方式二：手動指令啟動
 
@@ -123,8 +134,8 @@ log-filter-viewer/
 # 1. 安裝套件
 pip install -r requirements.txt
 
-# 2. 啟動 Streamlit (Port 6666)
-streamlit run streamlit_app/app.py --server.port 6666
+# 2. 在專案根目錄啟動 Streamlit（.streamlit/config.toml 會套用 Port 8686 與只監聽本機）
+streamlit run streamlit_app/app.py
 
 # 或直接使用 Python 執行 (內建自動轉接)
 py streamlit_app/app.py
@@ -132,19 +143,20 @@ py streamlit_app/app.py
 
 ### 方式三：純前端單檔版 (免安裝任何環境)
 
-直接雙擊開啟 `standalone_html/index.html` 或 `standalone_html/log-filter.html` 即可使用。
+直接雙擊開啟 `standalone_html/index.html` 即可使用；這個檔案可單獨複製給同事，不需要其他檔案。
 
 ---
 
 ## 🧪 自動化測試
 
-從專案目錄執行以下測試；Python 測試需要 requirements，HTML 測試另需 Node.js 18 以上（應用本身不需要 Node.js）：
+從專案目錄執行以下指令；HTML 行為測試需要 Node.js 18 以上（未安裝時自動略過，應用本身不需要 Node.js）：
 
 ```bash
-python tests/test_full.py
-python tests/test_regressions.py
-node tests/test_html.cjs
+pip install -r requirements-dev.txt
+python -m pytest
 ```
+
+每次 push 到 main 或開 Pull Request 時，GitHub Actions 會在 Ubuntu 與 Windows 上執行同一套測試。
 
 AppTest 的檔案上傳採用檔案物件替身；HTML 測試執行原始 JavaScript，使用最小 DOM 替身。這些檢查涵蓋資料與狀態行為，並不等同於真實瀏覽器效能或所有 Windows 安裝環境的驗證。
 

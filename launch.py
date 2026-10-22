@@ -2,9 +2,7 @@
 
 import argparse
 import importlib.metadata
-import os
 from pathlib import Path
-import shutil
 import subprocess
 import sys
 import time
@@ -14,6 +12,8 @@ import webbrowser
 
 
 ROOT = Path(__file__).resolve().parent
+# 6666 屬於瀏覽器封鎖的 IRC 連接埠，改用一般可直接開啟的連接埠。
+PORT = 8686
 
 
 def dependency_ready():
@@ -22,25 +22,6 @@ def dependency_ready():
         return tuple(int(part) for part in version.split(".")[:2]) >= (1, 40)
     except (importlib.metadata.PackageNotFoundError, ValueError):
         return False
-
-
-def open_browser(url):
-    """優先使用 Chromium 系瀏覽器，保留既有 6666 連接埠設定。"""
-    candidates = [shutil.which("msedge.exe"), shutil.which("chrome.exe")]
-    for root_name in ["ProgramFiles", "ProgramFiles(x86)", "LOCALAPPDATA"]:
-        base = os.environ.get(root_name)
-        if base:
-            candidates.extend(str(Path(base) / relative) for relative in [
-                "Microsoft/Edge/Application/msedge.exe", "Google/Chrome/Application/chrome.exe"
-            ])
-    for candidate in candidates:
-        if candidate and Path(candidate).is_file():
-            try:
-                subprocess.Popen([candidate, "--explicitly-allowed-ports=6666", url])
-                return
-            except OSError:
-                continue
-    webbrowser.open(url)
 
 
 def wait_until_ready(process, url):
@@ -64,7 +45,7 @@ def main(argv=None):
     parser.add_argument("--no-browser", action="store_true", help="只啟動服務")
     args = parser.parse_args(argv)
     command = [sys.executable, "-m", "streamlit", "run", str(ROOT / "streamlit_app/app.py"),
-               "--server.port", "6666", "--server.headless", "true", "--server.address", "127.0.0.1"]
+               "--server.port", str(PORT), "--server.headless", "true", "--server.address", "127.0.0.1"]
     if args.dry_run:
         print("Streamlit ready:", dependency_ready())
         print("Server command:", subprocess.list2cmdline(command))
@@ -75,12 +56,12 @@ def main(argv=None):
         if result != 0:
             print("Dependency installation failed; server was not started.", file=sys.stderr)
             return result
-    url = "http://localhost:6666"
+    url = f"http://localhost:{PORT}"
     print("Starting Log Filter Viewer:", url, flush=True)
     process = subprocess.Popen(command, cwd=ROOT)
     try:
         if not args.no_browser and wait_until_ready(process, url):
-            open_browser(url)
+            webbrowser.open(url)
         return process.wait()
     except KeyboardInterrupt:
         if process.poll() is None:
