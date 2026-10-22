@@ -477,6 +477,16 @@
     </button>
     <input type="file" id="fileInput" style="display:none;">
 
+    <div class="select-group">
+      <label for="encodingSelect">編碼：</label>
+      <select id="encodingSelect" class="custom-select" title="解碼失敗時請改選正確的文字編碼">
+        <option value="utf-8" selected>UTF-8</option>
+        <option value="big5">Big5</option>
+        <option value="gb18030">GB18030</option>
+        <option value="utf-16">UTF-16</option>
+      </select>
+    </div>
+
     <span class="file-info" id="fileInfo">尚未選擇檔案（也可直接將檔案拖曳至視窗中）</span>
     <span class="file-time-span" id="fileTimeSpan" style="display:none;"></span>
     
@@ -521,6 +531,17 @@
         <option value="and">符合全部 (AND)</option>
       </select>
     </div>
+
+    <label class="checkbox-label" title="以 JavaScript 正規表達式比對，例如 timeout|refused">
+      <input type="checkbox" id="useRegex">
+      <span>正規表達式</span>
+    </label>
+    <label class="checkbox-label">
+      <input type="checkbox" id="caseSensitive">
+      <span>區分大小寫</span>
+    </label>
+    <input type="text" id="excludeKeyword" class="custom-select" style="min-width: 200px;"
+           placeholder="🚫 排除關鍵字" title="含此字串的行不顯示；正規表達式模式可用 a|b 排除多個">
 
     <!-- 時間區間過濾 (預設不強制勾選，避免誤過濾) -->
     <div class="select-group" style="margin-left: 6px; padding-left: 8px; border-left: 1px solid #30363d;">
@@ -587,6 +608,10 @@ const fileTimeSpan      = document.getElementById('fileTimeSpan');
 const keywordsContainer = document.getElementById('keywordsContainer');
 const addKeywordBtn     = document.getElementById('addKeywordBtn');
 const matchModeSel      = document.getElementById('matchMode');
+const encodingSel       = document.getElementById('encodingSelect');
+const useRegexBox       = document.getElementById('useRegex');
+const caseSensitiveBox  = document.getElementById('caseSensitive');
+const excludeInput      = document.getElementById('excludeKeyword');
 
 const enableTimeFilter  = document.getElementById('enableTimeFilter');
 const startTimeInput    = document.getElementById('startTime');
@@ -614,6 +639,7 @@ let fileEndTime = null;
 let fileName = '';
 let currentMergedRanges = [];
 let presetTimeRange = false;
+let currentFile = null;
 
 // =====================
 // 1. 穩健檔案選取與拖曳
@@ -657,16 +683,34 @@ document.body.addEventListener('drop', (e) => {
 // =====================
 // 2. 檔案解析與載入
 // =====================
+function decodeText(buffer, encoding) {
+  const bytes = new Uint8Array(buffer);
+  // UTF-16 依 BOM 判斷位元組順序，沒有 BOM 時視為 Little Endian
+  if (encoding === 'utf-16') encoding = bytes[0] === 0xFE && bytes[1] === 0xFF ? 'utf-16be' : 'utf-16le';
+  // fatal 模式遇到無效位元組會丟出錯誤，避免靜默以 � 取代字元
+  return new TextDecoder(encoding, { fatal: true }).decode(bytes);
+}
+
 function loadFile(file) {
   if (!file) return;
-  fileName = file.name;
+  const encodingLabel = encodingSel.options ? encodingSel.options[encodingSel.selectedIndex].text : encodingSel.value;
 
-  fileInfo.innerHTML = `正在讀取 <strong>${escapeHtml(fileName)}</strong>...`;
+  fileInfo.innerHTML = `正在讀取 <strong>${escapeHtml(file.name)}</strong>...`;
 
   const reader = new FileReader();
 
   reader.onload = function (e) {
-    const text = e.target.result || '';
+    let text;
+    try {
+      text = decodeText(e.target.result, encodingSel.value || 'utf-8');
+    } catch (_) {
+      // 解碼失敗時保留先前的檔案與結果，提示改選編碼
+      fileInfo.innerHTML = `<span style="color:#f85149;">無法以 ${escapeHtml(encodingLabel)} 解碼「${escapeHtml(file.name)}」，請改選正確的編碼。尚未載入此檔案。</span>`;
+      currentFile = file;
+      return;
+    }
+    currentFile = file;
+    fileName = file.name;
     logLines = text.split(/\r?\n/);
 
     // 建立時間戳記索引
@@ -695,7 +739,7 @@ function loadFile(file) {
         endTimeInput.value = formatDatetimeLocal(fileEndTime + 1000);
       }
       fileTimeSpan.style.display = 'inline-block';
-      fileTimeSpan.textContent = `範圍: ${formatDisplayTime(fileStartTime)} ~ ${formatDisplayTime(fileEndTime)}`;
+      fileTimeSpan.textContent = `範圍: ${formatDisplayTime(fileStartTime, fileEndTime)} ~ ${formatDisplayTime(fileEndTime, fileStartTime)}`;
     } else {
       if (!presetTimeRange) {
         startTimeInput.value = '';
@@ -730,8 +774,11 @@ function loadFile(file) {
     fileInfo.innerHTML = '<span style="color:#f85149;">讀取檔案失敗，請檢查檔案權限後重試</span>';
   };
 
-  reader.readAsText(file);
+  reader.readAsArrayBuffer(file);
 }
+
+// 切換編碼時以新編碼重新讀取目前的檔案
+encodingSel.addEventListener('change', () => { if (currentFile) loadFile(currentFile); });
 
 // =====================
 // 3. 時間解析與格式化
@@ -739,10 +786,22 @@ function loadFile(file) {
 
 // 支援常見 Log4j / Spring / Linux 格式 (包含逗號與點號毫秒、斜線與橫線日期)
 const timeRegex = /(\d{4}[-/]\d{2}[-/]\d{2}[ T]\d{2}:\d{2}:\d{2}(?:[.,]\d+)?)/;
+// Apache / Nginx access log：[22/Oct/2026:14:00:00 +0800]，時區不換算
+const apacheRegex = /(\d{2})\/([A-Z][a-z]{2})\/(\d{4}):(\d{2}):(\d{2}):(\d{2})/;
+// syslog：行首的 Oct 22 14:00:00（可帶 <PRI>），沒有年份時使用今年
+const syslogRegex = /^(?:<\d{1,3}>)?([A-Z][a-z]{2}) {1,2}(\d{1,2}) (\d{2}):(\d{2}):(\d{2})/;
+const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+
+function localTime(year, monthIdx, day, hour, minute, second) {
+  const d = new Date(year, monthIdx, day, hour, minute, second);
+  // 拒絕 31/Feb 這類會被 Date 自動進位的日期
+  return d.getMonth() === monthIdx && d.getDate() === Number(day) ? d.getTime() : 0;
+}
 
 function extractTime(line) {
   if (!line) return 0;
   const prefix = line.substring(0, 120);
+  // 解析順序與 Streamlit 版相同：ISO 類格式 → Apache → syslog
   const match = prefix.match(timeRegex);
   if (match) {
     let dateStr = match[1];
@@ -755,7 +814,17 @@ function extractTime(line) {
       dateStr = dateStr.substring(0, 10) + 'T' + dateStr.substring(11);
     }
     const parsed = Date.parse(dateStr);
-    if (!isNaN(parsed)) return parsed;
+    return isNaN(parsed) ? 0 : parsed;
+  }
+  const apache = prefix.match(apacheRegex);
+  if (apache && MONTHS.includes(apache[2])) {
+    const [, day, mon, year, h, m, sec] = apache;
+    return localTime(Number(year), MONTHS.indexOf(mon), day, h, m, sec);
+  }
+  const syslog = prefix.match(syslogRegex);
+  if (syslog && MONTHS.includes(syslog[1])) {
+    const [, mon, day, h, m, sec] = syslog;
+    return localTime(new Date().getFullYear(), MONTHS.indexOf(mon), day, h, m, sec);
   }
   return 0;
 }
@@ -766,10 +835,10 @@ function formatDatetimeLocal(timestamp) {
   return `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`;
 }
 
-function formatDisplayTime(timestamp) {
-  const d = new Date(timestamp);
-  const pad = n => n.toString().padStart(2, '0');
-  return `${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`;
+function formatDisplayTime(timestamp, otherTimestamp = timestamp) {
+  // 與另一端不同日期（跨日日誌）時一併顯示日期
+  const full = formatDatetimeLocal(timestamp);
+  return full.slice(0, 10) === formatDatetimeLocal(otherTimestamp).slice(0, 10) ? full.slice(11) : full.replace('T', ' ');
 }
 
 // 時間過濾開關
@@ -847,13 +916,23 @@ function updateKeywordRowsUI() {
   });
 }
 
-function getKeywords() {
-  const list = [];
-  keywordsContainer.querySelectorAll('.search-input').forEach(input => {
-    const val = input.value.trim();
-    if (val) list.push(val);
+function getKeywordTerms() {
+  // 顏色依照關鍵字框的位置，與左側編號徽章一致（即使前面有空白框）
+  const terms = [];
+  keywordsContainer.querySelectorAll('.search-input').forEach((input, idx) => {
+    const raw = input.value.trim();
+    if (raw) terms.push({ raw, colorIdx: idx % 6 });
   });
-  return list;
+  return terms;
+}
+
+function getKeywords() {
+  return getKeywordTerms().map(term => term.raw);
+}
+
+function getMatchOptions() {
+  const exclude = excludeInput.value.trim();
+  return { useRegex: useRegexBox.checked, caseSensitive: caseSensitiveBox.checked, exclude: exclude ? [exclude] : [] };
 }
 
 addKeywordRow('', false);
@@ -901,7 +980,20 @@ function searchLog() {
     return;
   }
 
-  const matches = findMatches(keywords, matchMode, isTimeFilterOn, stStr, etStr);
+  const options = getMatchOptions();
+  let matches;
+  try {
+    matches = findMatches(keywords, matchMode, isTimeFilterOn, stStr, etStr, options);
+  } catch (error) {
+    currentMergedRanges = [];
+    logContainer.innerHTML = '';
+    placeholder.style.display = '';
+    placeholder.textContent = `正規表達式語法錯誤：${error.message}`;
+    logContainer.appendChild(placeholder);
+    matchCount.innerHTML = '';
+    copyBtn.disabled = true;
+    return;
+  }
   matchCount.innerHTML = `符合: <strong>${matches.length.toLocaleString()}</strong> 行`;
 
   if (matches.length === 0) {
@@ -942,12 +1034,28 @@ function searchLog() {
     copyBtn.disabled = true;
     return;
   }
-  renderResults(currentMergedRanges, new Set(matches), keywords);
+  renderResults(currentMergedRanges, new Set(matches), buildHighlighter(getKeywordTerms(), options));
   copyBtn.disabled = false;
 }
 
-function findMatches(keywords, matchMode, isTimeFilterOn, stStr, etStr) {
-  const cleanKws = keywords.map(k => k.toLowerCase());
+function compileTerms(terms, { useRegex = false, caseSensitive = false } = {}) {
+  // 非正規表達式且不分大小寫時，判斷函式預期收到已轉小寫的行；語法錯誤會丟出 SyntaxError
+  if (useRegex) {
+    return terms.map(term => {
+      const regex = new RegExp(term, caseSensitive ? '' : 'i');
+      return text => regex.test(text);
+    });
+  }
+  return terms.map(term => {
+    const needle = caseSensitive ? term : term.toLowerCase();
+    return text => text.includes(needle);
+  });
+}
+
+function findMatches(keywords, matchMode, isTimeFilterOn, stStr, etStr, options = {}) {
+  const include = compileTerms(keywords, options);
+  const excluded = compileTerms(options.exclude || [], options);
+  const fold = !options.useRegex && !options.caseSensitive;
   const result = [];
   
   let startMs = 0;
@@ -969,16 +1077,15 @@ function findMatches(keywords, matchMode, isTimeFilterOn, stStr, etStr) {
       }
     }
 
-    // 2. 關鍵字比對
-    let isMatch = true;
-    if (cleanKws.length > 0) {
-      const lineLower = logLines[i].toLowerCase();
-      isMatch = matchMode === 'and'
-        ? cleanKws.every(kw => lineLower.includes(kw))
-        : cleanKws.some(kw => lineLower.includes(kw));
+    // 2. 關鍵字比對與排除
+    const text = fold ? logLines[i].toLowerCase() : logLines[i];
+    if (include.length > 0) {
+      const isMatch = matchMode === 'and' ? include.every(test => test(text)) : include.some(test => test(text));
+      if (!isMatch) continue;
     }
+    if (excluded.some(test => test(text))) continue;
 
-    if (isMatch) result.push(i);
+    result.push(i);
   }
 
   return result;
@@ -1005,17 +1112,39 @@ function mergeRanges(ranges) {
 // =====================
 // 6. 渲染與安全高亮
 // =====================
-function renderResults(mergedRanges, matchSet, keywords) {
+function buildHighlighter(terms, { useRegex = false, caseSensitive = false } = {}) {
+  // 每個關鍵字包在具名群組中，由命中的群組找回顏色；正規表達式只建立一次
+  const colors = new Map();
+  terms.forEach(({ raw, colorIdx }) => {
+    const key = useRegex || caseSensitive ? raw : raw.toLowerCase();
+    if (!colors.has(key)) colors.set(key, colorIdx);
+  });
+  if (colors.size === 0) return escapeHtml;
+  const patterns = Array.from(colors.keys());
+  // 依長度降序排列，讓較長的關鍵字優先命中
+  if (!useRegex) patterns.sort((a, b) => b.length - a.length);
+  const source = patterns.map((p, i) => `(?<_kw${i}>${useRegex ? p : p.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')})`).join('|');
+  const regex = new RegExp(source, caseSensitive ? 'g' : 'gi');
+  const groupColors = patterns.map(p => colors.get(p));
+
+  return function (rawText) {
+    let html = '';
+    let pos = 0;
+    regex.lastIndex = 0;
+    let match;
+    while ((match = regex.exec(rawText)) !== null) {
+      if (match[0] === '') { regex.lastIndex++; continue; }
+      const idx = patterns.findIndex((_, i) => match.groups[`_kw${i}`] !== undefined);
+      html += escapeHtml(rawText.slice(pos, match.index));
+      html += `<span class="highlight highlight-${idx >= 0 ? groupColors[idx] : 0}">${escapeHtml(match[0])}</span>`;
+      pos = match.index + match[0].length;
+    }
+    return html + escapeHtml(rawText.slice(pos));
+  };
+}
+
+function renderResults(mergedRanges, matchSet, highlight) {
   placeholder.style.display = 'none';
-
-  const uniqueKws = Array.from(new Set(keywords.map(k => k.trim()).filter(Boolean)));
-  const kwMeta = uniqueKws.map(raw => ({
-    raw: raw,
-    colorIdx: keywords.indexOf(raw) % 6
-  })).sort((a, b) => b.raw.length - a.raw.length);
-
-  const pattern = kwMeta.map(item => item.raw.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')).join('|');
-  const splitRegex = pattern ? new RegExp(`(${pattern})`, 'gi') : null;
 
   const fragments = ['<table class="log-table">'];
 
@@ -1026,9 +1155,7 @@ function renderResults(mergedRanges, matchSet, keywords) {
     for (let i = start; i <= end; i++) {
       const isMatch = matchSet.has(i);
       const rowClass = isMatch ? 'match' : 'context';
-      const displayContent = isMatch && splitRegex
-        ? safeHighlight(logLines[i], splitRegex, kwMeta)
-        : escapeHtml(logLines[i]);
+      const displayContent = isMatch ? highlight(logLines[i]) : escapeHtml(logLines[i]);
 
       fragments.push(
         `<tr class="${rowClass}">
@@ -1041,23 +1168,6 @@ function renderResults(mergedRanges, matchSet, keywords) {
 
   fragments.push('</table>');
   logContainer.innerHTML = fragments.join('');
-}
-
-function safeHighlight(rawText, splitRegex, kwMeta) {
-  const parts = rawText.split(splitRegex);
-  let html = '';
-  for (let i = 0; i < parts.length; i++) {
-    if (!parts[i]) continue;
-    if (i % 2 === 0) {
-      html += escapeHtml(parts[i]);
-    } else {
-      const matchLower = parts[i].toLowerCase();
-      const found = kwMeta.find(k => k.raw.toLowerCase() === matchLower);
-      const colorIdx = found ? found.colorIdx : 0;
-      html += `<span class="highlight highlight-${colorIdx}">${escapeHtml(parts[i])}</span>`;
-    }
-  }
-  return html;
 }
 
 // =====================
@@ -1091,7 +1201,10 @@ function getPreset() {
     contextLines: Number(contextSel.value),
     enableTimeFilter: enableTimeFilter.checked,
     startTime: startTimeInput.value,
-    endTime: endTimeInput.value
+    endTime: endTimeInput.value,
+    useRegex: useRegexBox.checked,
+    caseSensitive: caseSensitiveBox.checked,
+    excludeKeyword: excludeInput.value.trim()
   };
 }
 
@@ -1143,7 +1256,15 @@ function normalizePreset(data) {
   const startTime = normalizeTime(field('startTime', 'start_time', ''));
   const endTime = normalizeTime(field('endTime', 'end_time', ''));
   if (startTime && endTime && startTime > endTime) throw new Error('開始時間不可晚於結束時間');
-  return {schemaVersion: 1, keywords: keywords.map(kw => kw.trim()).filter(Boolean), matchMode, contextLines, enableTimeFilter, startTime, endTime};
+  // 以下為新增的選填欄位，舊設定檔沒有時使用預設值
+  const useRegex = field('useRegex', 'useRegex', false);
+  if (typeof useRegex !== 'boolean') throw new Error('正規表達式開關必須是布林值');
+  const caseSensitive = field('caseSensitive', 'caseSensitive', false);
+  if (typeof caseSensitive !== 'boolean') throw new Error('區分大小寫開關必須是布林值');
+  const excludeKeyword = field('excludeKeyword', 'excludeKeyword', '');
+  if (typeof excludeKeyword !== 'string') throw new Error('excludeKeyword 必須是字串');
+  return {schemaVersion: 1, keywords: keywords.map(kw => kw.trim()).filter(Boolean), matchMode, contextLines, enableTimeFilter,
+          startTime, endTime, useRegex, caseSensitive, excludeKeyword: excludeKeyword.trim()};
 }
 
 function applyPreset(data) {
@@ -1158,6 +1279,9 @@ function applyPreset(data) {
   resetTimeBtn.disabled = !preset.enableTimeFilter;
   startTimeInput.value = preset.startTime;
   endTimeInput.value = preset.endTime;
+  useRegexBox.checked = preset.useRegex;
+  caseSensitiveBox.checked = preset.caseSensitive;
+  excludeInput.value = preset.excludeKeyword;
   keywordsContainer.innerHTML = '';
   (preset.keywords.length ? preset.keywords : ['']).forEach(kw => addKeywordRow(kw, false));
 }
@@ -1197,6 +1321,9 @@ function clearSearch() {
   startTimeInput.disabled = true;
   endTimeInput.disabled = true;
   resetTimeBtn.disabled = true;
+  useRegexBox.checked = false;
+  caseSensitiveBox.checked = false;
+  excludeInput.value = '';
   matchCount.innerHTML = '';
   currentMergedRanges = [];
   logContainer.innerHTML = '';
@@ -1218,6 +1345,9 @@ function escapeHtml(text) {
 
 matchModeSel.addEventListener('change', () => { if (logLines.length > 0) searchLog(); });
 contextSel.addEventListener('change', () => { if (logLines.length > 0) searchLog(); });
+useRegexBox.addEventListener('change', () => { if (logLines.length > 0) searchLog(); });
+caseSensitiveBox.addEventListener('change', () => { if (logLines.length > 0) searchLog(); });
+excludeInput.addEventListener('keydown', e => { if (e.key === 'Enter') { e.preventDefault(); searchLog(); } });
 startTimeInput.addEventListener('change', () => { if (logLines.length > 0) searchLog(); });
 endTimeInput.addEventListener('change', () => { if (logLines.length > 0) searchLog(); });
 
