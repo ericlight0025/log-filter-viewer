@@ -125,7 +125,7 @@ with open(bat_path, 'r', encoding='utf-8') as f:
     bat_content = f.read()
 assert 'launch.py' in bat_content and '%*' in bat_content, 'start.bat 未轉交 Python 啟動器或參數'
 launcher = (repo_root / 'launch.py').read_text(encoding='utf-8')
-assert '--explicitly-allowed-ports=6666' in launcher, 'Python 啟動器缺少瀏覽器解鎖參數'
+assert 'PORT = 8686' in launcher and '--explicitly-allowed-ports' not in launcher, '啟動器仍依賴瀏覽器封鎖連接埠的解鎖參數'
 for name in ['start.bat', 'run.bat']:
     raw = (repo_root / name).read_bytes()
     assert not raw.startswith(b'\xef\xbb\xbf'), f'{name} 含 BOM'

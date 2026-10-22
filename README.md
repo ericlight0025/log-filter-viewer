@@ -93,7 +93,7 @@ log-filter-viewer/
 ├── docs/                       # 文件資產
 │   └── images/
 │       └── preview.png         # 介面預覽截圖
-├── start.bat                   # Windows 一鍵啟動腳本 (自動開瀏覽器與解除 6666 限制)
+├── start.bat                   # Windows 一鍵啟動腳本 (自動檢查依賴並開啟瀏覽器)
 ├── run.bat                     # Windows 啟動腳本別名
 ├── launch.py                   # 依賴檢查、服務與瀏覽器啟動
 ├── requirements.txt            # Python 依賴清單 (streamlit>=1.40.0)
@@ -110,12 +110,12 @@ log-filter-viewer/
 
 直接在專案根目錄雙擊執行 **`start.bat`**（或 `run.bat`）：
 - 自動檢測 Python 環境與補齊依賴套件。
-- 自動啟動 Streamlit 服務（Port 6666）。
-- 自動開啟 Edge / Chrome 瀏覽器並帶上 `--explicitly-allowed-ports=6666` 參數解除瀏覽器安全阻擋。
+- 自動啟動 Streamlit 服務（Port 8686）。
+- 服務就緒後自動以預設瀏覽器開啟 `http://localhost:8686`。
 
 需要先安裝 Python；若 Streamlit 缺少或低於 1.40，首次啟動會透過目前 Python 的 pip 安裝 requirements，因此需要網路與套件安裝權限。服務預設只監聽本機 `127.0.0.1`。
 
-可用 `start.bat --dry-run` 檢查啟動計畫（不安裝、不啟動），或 `start.bat --no-browser` 只啟動服務。若瀏覽器已有執行中的視窗而忽略連接埠參數，請完全關閉該瀏覽器後再啟動。
+可用 `start.bat --dry-run` 檢查啟動計畫（不安裝、不啟動），或 `start.bat --no-browser` 只啟動服務。
 
 ### 方式二：手動指令啟動
 
@@ -123,8 +123,8 @@ log-filter-viewer/
 # 1. 安裝套件
 pip install -r requirements.txt
 
-# 2. 啟動 Streamlit (Port 6666)
-streamlit run streamlit_app/app.py --server.port 6666
+# 2. 啟動 Streamlit (Port 8686)
+streamlit run streamlit_app/app.py --server.port 8686
 
 # 或直接使用 Python 執行 (內建自動轉接)
 py streamlit_app/app.py

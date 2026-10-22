@@ -1,9 +1,9 @@
 @echo off
-title Log Filter Viewer - Port 6666
+title Log Filter Viewer - Port 8686
 cd /d "%~dp0"
 
 echo ========================================================
-echo   Starting Log Filter Viewer on http://localhost:6666
+echo   Starting Log Filter Viewer on http://localhost:8686
 echo ========================================================
 echo.
 
@@ -21,7 +21,7 @@ if errorlevel 1 (
 )
 
 echo Checking dependencies and starting Streamlit server...
-echo Local URL: http://localhost:6666
+echo Local URL: http://localhost:8686
 echo Press Ctrl+C in this window to stop the server.
 echo.
 
