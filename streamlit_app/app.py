@@ -18,7 +18,7 @@ from preset_utils import CONTEXT_OPTIONS, MODE_LABELS, normalize_preset
 if __name__ == "__main__":
     if not st.runtime.exists():
         from streamlit.web import cli as stcli
-        sys.argv = ["streamlit", "run", __file__, "--server.port", "8686"]
+        sys.argv = ["streamlit", "run", __file__, "--server.port", "8686", "--server.address", "127.0.0.1"]
         sys.exit(stcli.main())
 
 # ==============================================================================

@@ -1,0 +1,7 @@
+# 從專案根目錄執行 `streamlit run` 時套用；日誌可能含敏感資料，預設只開放本機連線。
+[server]
+address = "127.0.0.1"
+port = 8686
+
+[browser]
+gatherUsageStats = false

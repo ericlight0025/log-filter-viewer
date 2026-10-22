@@ -126,6 +126,9 @@ with open(bat_path, 'r', encoding='utf-8') as f:
 assert 'launch.py' in bat_content and '%*' in bat_content, 'start.bat 未轉交 Python 啟動器或參數'
 launcher = (repo_root / 'launch.py').read_text(encoding='utf-8')
 assert 'PORT = 8686' in launcher and '--explicitly-allowed-ports' not in launcher, '啟動器仍依賴瀏覽器封鎖連接埠的解鎖參數'
+app_source = (repo_root / 'streamlit_app/app.py').read_text(encoding='utf-8')
+assert '"--server.address", "127.0.0.1"' in app_source, '直接執行 app.py 未限制只監聽本機'
+assert 'address = "127.0.0.1"' in (repo_root / '.streamlit/config.toml').read_text(encoding='utf-8'), 'config.toml 未限制只監聽本機'
 for name in ['start.bat', 'run.bat']:
     raw = (repo_root / name).read_bytes()
     assert not raw.startswith(b'\xef\xbb\xbf'), f'{name} 含 BOM'

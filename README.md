@@ -93,6 +93,7 @@ log-filter-viewer/
 ├── docs/                       # 文件資產
 │   └── images/
 │       └── preview.png         # 介面預覽截圖
+├── .streamlit/config.toml       # 預設 Port 8686、只監聽 127.0.0.1
 ├── start.bat                   # Windows 一鍵啟動腳本 (自動檢查依賴並開啟瀏覽器)
 ├── run.bat                     # Windows 啟動腳本別名
 ├── launch.py                   # 依賴檢查、服務與瀏覽器啟動
@@ -123,8 +124,8 @@ log-filter-viewer/
 # 1. 安裝套件
 pip install -r requirements.txt
 
-# 2. 啟動 Streamlit (Port 8686)
-streamlit run streamlit_app/app.py --server.port 8686
+# 2. 在專案根目錄啟動 Streamlit（.streamlit/config.toml 會套用 Port 8686 與只監聽本機）
+streamlit run streamlit_app/app.py
 
 # 或直接使用 Python 執行 (內建自動轉接)
 py streamlit_app/app.py
