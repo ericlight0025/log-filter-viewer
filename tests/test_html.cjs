@@ -39,7 +39,7 @@ class FileReader {
 }
 const context = {
   document, FileReader, console, assert, Float64Array, Date, Set, Map, Blob, URL, setTimeout,
-  TextDecoder, TextEncoder, Uint8Array,
+  TextDecoder, TextEncoder, Uint8Array, clearTimeout,
   alert: message => { throw new Error(message); }, localStorage: {getItem() { return null; }, setItem() {}}
 };
 vm.createContext(context);
@@ -158,3 +158,75 @@ assert.deepEqual(plain(run('logLines')), ['ERROR utf8'], '解碼失敗不可覆�
 run(`encodingSel.value = 'big5'; loadFile(currentFile);`);
 assert.deepEqual(plain(run('logLines')), ['ERROR 中文']);
 console.log('PASS: 文字編碼選擇與解碼失敗保護');
+
+// ---- 正規表達式 Web Worker：以同一份程式碼在獨立 vm 中模擬 Worker ----
+function makeWorkerContext() {
+  const posted = [];
+  const ctx = { self: null, Float64Array, Set, RegExp, Map, console };
+  ctx.self = { postMessage: msg => posted.push(JSON.parse(JSON.stringify(msg))) };
+  vm.createContext(ctx);
+  vm.runInContext(run('buildWorkerSource()'), ctx);
+  return { posted, send: data => ctx.self.onmessage({ data }) };
+}
+const w = makeWorkerContext();
+w.send({ type: 'load', lines: ['ERROR timeout', 'error retry', 'INFO ok'], timestamps: new Float64Array(3) });
+w.send({ type: 'search', id: 1, maxRows: 50000, request: { keywords: ['^error (timeout|retry)$'], matchMode: 'or', isTimeFilterOn: false, stStr: '', etStr: '',
+  options: { useRegex: true, caseSensitive: false, exclude: [] }, contextSize: 0, terms: [{ raw: '^error (timeout|retry)$', colorIdx: 2 }] } });
+assert.deepEqual(w.posted[0].matches, [0, 1]);
+assert.ok(w.posted[0].html.includes('highlight-2">ERROR timeout'), w.posted[0].html);
+w.send({ type: 'search', id: 2, maxRows: 1, request: { keywords: ['e'], matchMode: 'or', isTimeFilterOn: false, stStr: '', etStr: '',
+  options: { useRegex: true, exclude: [] }, contextSize: 0, terms: [] } });
+assert.equal(w.posted[1].html, null, '超過上限時 Worker 不組 HTML');
+w.send({ type: 'search', id: 3, maxRows: 50000, request: { keywords: ['(bad'], matchMode: 'or', isTimeFilterOn: false, stStr: '', etStr: '',
+  options: { useRegex: true, exclude: [] }, contextSize: 0, terms: [] } });
+assert.equal(w.posted[2].type, 'error');
+console.log('PASS: Worker 程式碼：搜尋、上限與語法錯誤');
+
+// 主執行緒的 Worker 路徑：假 Worker 同步跑同一份程式碼，另一個假 Worker 永不回應以驗證逾時中止
+class FakeWorker {
+  constructor() { this.inner = makeWorkerContext(); FakeWorker.created++; this.terminated = false; }
+  postMessage(msg) {
+    if (FakeWorker.hang) return;
+    this.inner.send(msg);
+    const reply = this.inner.posted.pop();
+    if (reply) this.onmessage({ data: reply });
+  }
+  terminate() { this.terminated = true; FakeWorker.terminated++; }
+}
+FakeWorker.created = 0; FakeWorker.terminated = 0; FakeWorker.hang = false;
+context.Worker = FakeWorker;
+context.Blob = class { constructor(parts) { this.text = parts.join(''); } };
+context.URL = { createObjectURL: () => 'blob:fake', revokeObjectURL() {} };
+run(`logLines = ['ERROR timeout', 'error retry', 'ERROR health-check', 'WARN disk 91%'];
+     lineTimestamps = new Float64Array(4); loadedFileVersion += 1;
+     keywordsContainer.innerHTML = ''; addKeywordRow('timeout|retry', false);
+     useRegexBox.checked = true; caseSensitiveBox.checked = false; excludeInput.value = 'retry';
+     enableTimeFilter.checked = false; contextSel.value = '0'; matchModeSel.value = 'or';
+     searchLog();`);
+assert.equal(FakeWorker.created, 1);
+assert.ok(run('matchCount.innerHTML').includes('<strong>1</strong>'), run('matchCount.innerHTML'));
+assert.ok(run('logContainer.innerHTML').includes('class="line-no">1'), 'Worker 結果應渲染到畫面');
+assert.equal(run('copyBtn.disabled'), false);
+assert.equal(run('searchBtn.disabled'), false);
+run("keywordsContainer.querySelector('.search-input').value = '(bad'; searchLog();");
+assert.ok(run('placeholder.textContent').includes('語法錯誤'));
+assert.equal(FakeWorker.created, 1, '同一檔案重用同一個 Worker');
+run("useRegexBox.checked = false; keywordsContainer.querySelector('.search-input').value = 'ERROR'; searchLog();");
+assert.ok(run('matchCount.innerHTML').includes('<strong>2</strong>'), '非 regex 仍走同步路徑');
+console.log('PASS: 主執行緒 Worker 路徑：結果渲染、語法錯誤、Worker 重用');
+
+FakeWorker.hang = true;
+run("REGEX_WORKER_TIMEOUT_MS = 30; useRegexBox.checked = true; keywordsContainer.querySelector('.search-input').value = '(a+)+$'; searchLog();");
+assert.equal(run('searchBtn.disabled'), true, '搜尋中應停用按鈕');
+assert.ok(run('placeholder.textContent').includes('搜尋中'));
+setTimeout(() => {
+  assert.equal(FakeWorker.terminated, 1, '逾時必須中止 Worker');
+  assert.equal(run('regexWorker'), null);
+  assert.equal(run('searchBtn.disabled'), false);
+  assert.ok(run('placeholder.textContent').includes('逾時'), run('placeholder.textContent'));
+  assert.equal(run('copyBtn.disabled'), true);
+  FakeWorker.hang = false;
+  run('searchLog();');
+  assert.equal(FakeWorker.created, 2, '逾時後下一次搜尋重建 Worker');
+  console.log('PASS: 正規表達式逾時中止與恢復');
+}, 80);

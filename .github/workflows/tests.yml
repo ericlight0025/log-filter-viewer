@@ -5,6 +5,10 @@ on:
     branches: [main]
   pull_request:
 
+# 測試只需要讀取原始碼，不給 GITHUB_TOKEN 寫入權限
+permissions:
+  contents: read
+
 jobs:
   test:
     strategy:
