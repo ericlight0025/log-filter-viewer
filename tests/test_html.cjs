@@ -149,7 +149,7 @@ assert.deepEqual(plain(run('getKeywordTerms()')), [{raw: 'timeout', colorIdx: 1}
 console.log('PASS: 高亮顏色跟隨關鍵字編號');
 
 run(`encodingSel.value = 'utf-8'; fileInfo.innerHTML = '';
-     loadFile({name: 'ok.log', text: 'ERROR utf8'});`);
+     loadFile({name: 'ok.log', text: 'ERROR utf8\\n'});`);
 const big5 = Buffer.from([0x45, 0x52, 0x52, 0x4f, 0x52, 0x20, 0xa4, 0xa4, 0xa4, 0xe5]); // 'ERROR 中文' (Big5)
 context.big5 = new Uint8Array(big5);
 run(`loadFile({name: 'big5.log', bytes: big5});`);

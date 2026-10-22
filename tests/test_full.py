@@ -112,7 +112,7 @@ def test_full_acceptance():
     html_path = repo_root / 'standalone_html/index.html'
     with open(html_path, 'r', encoding='utf-8') as f:
         html_content = f.read()
-    assert 'safeHighlight' in html_content, 'HTML 缺少 safeHighlight 安全高亮'
+    assert 'buildHighlighter' in html_content, 'HTML 缺少 buildHighlighter 安全高亮'
     assert 'mergeRanges' in html_content, 'HTML 缺少 mergeRanges 合併演算法'
     assert 'exportPreset' in html_content, 'HTML 缺少 exportPreset 條件匯出'
     assert not (repo_root / 'standalone_html/log-filter.html').exists(), '單檔版只保留 index.html，避免兩份內容分歧'

@@ -711,7 +711,8 @@ function loadFile(file) {
     }
     currentFile = file;
     fileName = file.name;
-    logLines = text.split(/\r?\n/);
+    // 與 Streamlit 版一致：檔尾換行不算成多一行空白行
+    logLines = text.replace(/\r?\n$/, '').split(/\r?\n/);
 
     // 建立時間戳記索引
     lineTimestamps = new Float64Array(logLines.length);
