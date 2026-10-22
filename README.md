@@ -79,16 +79,20 @@
 log-filter-viewer/
 ├── streamlit_app/              # 現代化 Streamlit Web 應用模組
 │   ├── app.py                  # Streamlit 主程式 (支援自動轉接與雙點擊啟動)
+│   ├── log_search.py           # 時間解析、搜尋、區間合併與渲染 (純函式)
 │   └── preset_utils.py         # 設定檔驗證與舊版格式相容
 ├── standalone_html/            # 零依賴純前端單檔版本 (可離線獨立運作)
 │   └── index.html              # 完整功能單一檔案版 (可單獨複製分享)
 ├── samples/                    # 測試範例與預設設定檔
 │   ├── sample-server.log       # 247 行 Java 伺服器除錯範例 Log
 │   └── example-preset.json     # 關鍵字與查詢條件預設檔範例
-├── tests/                      # 自動化驗收測試套件
+├── tests/                      # 自動化測試套件 (python -m pytest)
 │   ├── test_full.py            # 7 項基礎驗收檢查
+│   ├── test_log_search.py      # 搜尋、合併、高亮純函式單元測試
 │   ├── test_regressions.py     # 檔案／設定／編碼／啟動回歸測試
+│   ├── test_html_js.py         # 以 pytest 執行 test_html.cjs
 │   └── test_html.cjs           # HTML JavaScript 行為測試（Node.js）
+├── .github/workflows/tests.yml # GitHub Actions：Ubuntu 與 Windows 自動測試
 ├── docs/                       # 文件資產
 │   └── images/
 │       └── preview.png         # 介面預覽截圖
@@ -97,6 +101,7 @@ log-filter-viewer/
 ├── run.bat                     # Windows 啟動腳本別名
 ├── launch.py                   # 依賴檢查、服務與瀏覽器啟動
 ├── requirements.txt            # Python 依賴清單 (streamlit>=1.40.0)
+├── requirements-dev.txt        # 測試依賴 (pytest)
 ├── LICENSE                     # 完整官方 MIT 開源授權條款
 ├── .gitignore                  # Git 忽略設定
 └── README.md                   # 專案說明文件 (包含操作手冊與授權詳解)
@@ -138,13 +143,14 @@ py streamlit_app/app.py
 
 ## 🧪 自動化測試
 
-從專案目錄執行以下測試；Python 測試需要 requirements，HTML 測試另需 Node.js 18 以上（應用本身不需要 Node.js）：
+從專案目錄執行以下指令；HTML 行為測試需要 Node.js 18 以上（未安裝時自動略過，應用本身不需要 Node.js）：
 
 ```bash
-python tests/test_full.py
-python tests/test_regressions.py
-node tests/test_html.cjs
+pip install -r requirements-dev.txt
+python -m pytest
 ```
+
+每次 push 到 main 或開 Pull Request 時，GitHub Actions 會在 Ubuntu 與 Windows 上執行同一套測試。
 
 AppTest 的檔案上傳採用檔案物件替身；HTML 測試執行原始 JavaScript，使用最小 DOM 替身。這些檢查涵蓋資料與狀態行為，並不等同於真實瀏覽器效能或所有 Windows 安裝環境的驗證。
 

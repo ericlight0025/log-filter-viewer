@@ -476,7 +476,6 @@ with col_context:
     context_lines = st.selectbox(
         "前後上下文行數",
         options=CONTEXT_OPTIONS,
-        index=2,
         key="context_lines",
         format_func=lambda x: f"±{x} 行" if x > 0 else "0 行 (僅命中行)"
     )
