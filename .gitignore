@@ -23,3 +23,18 @@ filtered_log_*.txt
 
 # Test caches
 .pytest_cache/
+
+# --- 敏感檔：金鑰、token、憑證不要進 git（2026-10-26 統一加入）---
+.env
+.env.*
+!.env.example
+.dev.vars
+client_secret*.json
+client_secrets*.json
+token.json
+credentials.json
+auth.json
+*.pem
+*.key
+id_rsa*
+id_ed25519*
